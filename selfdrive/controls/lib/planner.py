@@ -44,17 +44,18 @@ _MODEL_V_K = [[0.07068858], [0.04826294]]
 # 75th percentile 75%的速度阈值
 SPEED_PERCENTILE_IDX = 7
 
-
+# 进行速度的插值的情况进行来做巡航的速度的最小角速度和最大加速度
 def calc_cruise_accel_limits(v_ego):
   a_cruise_min = interp(v_ego, _A_CRUISE_MIN_BP, _A_CRUISE_MIN_V)
   a_cruise_max = interp(v_ego, _A_CRUISE_MAX_BP, _A_CRUISE_MAX_V)
   return np.vstack([a_cruise_min, a_cruise_max])
 
-
+# 转湾的加速度设hi
 def limit_accel_in_turns(v_ego, angle_steers, a_target, CP):
   """
   This function returns a limited long acceleration allowed, depending on the existing lateral acceleration
   this should avoid accelerating when losing the target in turns
+  这个函数输出的是有限制的纵向加速度，根据当前的存在的侧向加速度信息，当这个纵向加速度转弯时候失去信息。
   """
 
   a_total_max = interp(v_ego, _A_TOTAL_MAX_BP, _A_TOTAL_MAX_V)
