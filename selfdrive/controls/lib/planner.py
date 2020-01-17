@@ -18,30 +18,30 @@ MAX_SPEED = 255.0
 
 LON_MPC_STEP = 0.2  # first step is 0.2s
 MAX_SPEED_ERROR = 2.0
-AWARENESS_DECEL = -0.2     # car smoothly decel at .2m/s^2 when user is distracted 
+AWARENESS_DECEL = -0.2     # car smoothly decel at .2m/s^2 when user is distracted 驾驶人分神以0.2m/s2加速度进行减速
 
-# lookup tables VS speed to determine min and max accels in cruise
-# make sure these accelerations are smaller than mpc limits
+# lookup tables VS speed to determine min and max accels in cruise 差表速度来确定最大最小加速度
+# make sure these accelerations are smaller than mpc limits， 确认这些加速度小于MPC得限制
 _A_CRUISE_MIN_V  = [-1.0, -.8, -.67, -.5, -.30]
 _A_CRUISE_MIN_BP = [   0., 5.,  10., 20.,  40.]
 
-# need fast accel at very low speed for stop and go
-# make sure these accelerations are smaller than mpc limits
+# need fast accel at very low speed for stop and go，非常低得速度下进行快速启停
+# make sure these accelerations are smaller than mpc limits 确定这些加速度小于Mpc得限制
 _A_CRUISE_MAX_V = [1.6, 1.6, 0.65, .4]
 _A_CRUISE_MAX_BP = [0.,  6.4, 22.5, 40.]
 
-# Lookup table for turns
+# Lookup table for turns 查表 转向
 _A_TOTAL_MAX_V = [1.7, 3.2]
 _A_TOTAL_MAX_BP = [20., 40.]
 
 
-# Model speed kalman stuff
+# Model speed kalman stuff 卡尔曼速度模型
 _MODEL_V_A = [[1.0, DT_PLAN], [0.0, 1.0]]
 _MODEL_V_C = [1.0, 0]
-# calculated with observation std of 2m/s and accel proc noise of 2m/s**2
+# calculated with observation std of 2m/s and accel proc noise of 2m/s**2 观测得加速度2m/s2 加速度得噪声为拍
 _MODEL_V_K = [[0.07068858], [0.04826294]]
 
-# 75th percentile
+# 75th percentile 75%的速度阈值
 SPEED_PERCENTILE_IDX = 7
 
 
