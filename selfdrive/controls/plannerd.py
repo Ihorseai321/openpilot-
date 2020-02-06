@@ -41,10 +41,9 @@ def plannerd_thread(sm=None, pm=None):
     sm.update()
 
     if sm.updated['model']:
-      PP.update(sm, pm, CP, VM)
+      PP.update(sm, pm, iP, VM)
     if sm.updated['radarState']:
-      PL.update(sm, pm, CP, VM, PP)
-
+      PL.update(sm, pm, CP, VM, PP)：：
 
 def main(sm=None, pm=None):
   plannerd_thread(sm, pm)
