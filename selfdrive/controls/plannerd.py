@@ -103,8 +103,11 @@ def plannerd_thread(sm=None, pm=None):
   # start the loop
   set_realtime_priority(2)
 
+  params = Params()
+  params.put("CarParams", CP.to_bytes())
+
   cloudlog.info("plannerd is waiting for CarParams")
-  CP = car.CarParams.from_bytes(Params().get("CarParams", block=True))
+  #CP = car.CarParams.from_bytes(Params().get("CarParams", block=True))
   cloudlog.info("plannerd got CarParams: %s", CP.carName)
   PL = Planner(CP)
   PP = PathPlanner(CP)
@@ -121,13 +124,16 @@ def plannerd_thread(sm=None, pm=None):
   sm['liveParameters'].sensorValid = True
   sm['liveParameters'].steerRatio = CP.steerRatio
   sm['liveParameters'].stiffnessFactor = 1.0
-
+  
+  intcount = 0
   while True:
     sm.update()
-    print("-------------------------this is plannerd.py's while true-----------------------")
+    print(sm['model'])
     if sm.updated['model']:
+      print("----------------plannerd-model-updated----------------")
       PP.update(sm, pm, CP, VM)
     if sm.updated['radarState']:
+      print("----------------plannerd-radarState-updated----------------")
       PL.update(sm, pm, CP, VM, PP)
 
 

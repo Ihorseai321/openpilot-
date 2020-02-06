@@ -116,6 +116,7 @@ class Planner():
 
   def update(self, sm, pm, CP, VM, PP):
     """Gets called when new radarState is available"""
+    print("----------------planner.update----------------")
     cur_time = sec_since_boot()
     v_ego = sm['carState'].vEgo
 
@@ -241,7 +242,7 @@ class Planner():
 
     # Send out fcw
     plan_send.plan.fcw = fcw
-
+    print("----------------planner.py : %s", plan_send.plan.fcw)
     pm.send('plan', plan_send)
 
     # Interpolate 0.05 seconds and save as starting point for next iteration

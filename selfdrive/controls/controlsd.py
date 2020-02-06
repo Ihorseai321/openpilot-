@@ -37,6 +37,10 @@ HwType = log.HealthData.HwType
 LaneChangeState = log.PathPlan.LaneChangeState
 LaneChangeDirection = log.PathPlan.LaneChangeDirection
 
+def get_CI(CP):
+  from selfdrive.car.car_helpers import interfaces
+  CarInterface, CarController = interfaces[CP.carFingerprint]
+  return CarInterface(CP, CarController)
 
 def add_lane_change_event(events, path_plan):
   if path_plan.laneChangeState == LaneChangeState.preLaneChange:
@@ -422,10 +426,16 @@ def data_send(sm, pm, CS, CI, CP, VM, state, events, actuators, v_cruise_kph, rk
 
   if CP.lateralTuning.which() == 'pid':
     dat.controlsState.lateralControlState.pidState = lac_log
+    print("----------pid-----------")
   elif CP.lateralTuning.which() == 'lqr':
     dat.controlsState.lateralControlState.lqrState = lac_log
+    print("----------lqr-----------")
   elif CP.lateralTuning.which() == 'indi':
     dat.controlsState.lateralControlState.indiState = lac_log
+    print("----------indi-----------")
+  print('----------------')
+  print(CP.lateralTuning.which())
+  print('----------------')
   pm.send('controlsState', dat)
 
   # carState
@@ -466,14 +476,17 @@ def controlsd_thread(sm=None, pm=None, can_sock=None):
 
   # start the loop
   set_realtime_priority(3)
-
+  
+  print("----------------before Params----------------")
   params = Params()
+  print("----------------Params----------------")
 
   is_metric = params.get("IsMetric", encoding='utf8') == "1"
   is_ldw_enabled = params.get("IsLdwEnabled", encoding='utf8') == "1"
   passive = params.get("Passive", encoding='utf8') == "1"
   openpilot_enabled_toggle = params.get("OpenpilotEnabledToggle", encoding='utf8') == "1"
   community_feature_toggle = params.get("CommunityFeaturesToggle", encoding='utf8') == "1"
+  print("----------------Params Done----------------")
 
   passive = passive or not openpilot_enabled_toggle
 
@@ -481,22 +494,33 @@ def controlsd_thread(sm=None, pm=None, can_sock=None):
   if pm is None:
     pm = messaging.PubMaster(['sendcan', 'controlsState', 'carState', 'carControl', 'carEvents', 'carParams'])
 
+  print("----------------PubMaster Done----------------")
   if sm is None:
     sm = messaging.SubMaster(['thermal', 'health', 'liveCalibration', 'driverMonitoring', 'plan', 'pathPlan', \
                               'model', 'gpsLocation'], ignore_alive=['gpsLocation'])
+  print("----------------SubMaster Done----------------")
 
 
   if can_sock is None:
     can_timeout = None if os.environ.get('NO_CAN_TIMEOUT', False) else 100
     can_sock = messaging.sub_sock('can', timeout=can_timeout)
+  print("----------------can_sock Done----------------")
+
 
   # wait for health and CAN packets
-  hw_type = messaging.recv_one(sm.sock['health']).health.hwType
-  has_relay = hw_type in [HwType.blackPanda, HwType.uno]
-  print("Waiting for CAN messages...")
-  messaging.get_one_can(can_sock)
+  hw_type = 'unknown' # messaging.recv_one(sm.sock['health']).health.hwType
+  print("----------------hw_type Done----------------")
 
-  CI, CP = get_car(can_sock, pm.sock['sendcan'], has_relay)
+  has_relay = hw_type in [HwType.blackPanda, HwType.uno]
+  print("----------------has_relay Done----------------")
+
+  print("Waiting for CAN messages...")
+  # messaging.get_one_can(can_sock)
+  print("------------before get_car------------")
+  #CI, CP = get_car(can_sock, pm.sock['sendcan'], has_relay)
+  CP = car.CarParams.from_bytes(params.get("CarParams", block=True))
+  CI = get_CI(CP)
+  print("------------get_car Done------------")
 
   car_recognized = CP.carName != 'mock'
   # If stock camera is disconnected, we loaded car controls and it's not chffrplus
@@ -504,10 +528,10 @@ def controlsd_thread(sm=None, pm=None, can_sock=None):
   community_feature_disallowed = CP.communityFeature and not community_feature_toggle
   read_only = not car_recognized or not controller_available or CP.dashcamOnly or community_feature_disallowed
   if read_only:
-    CP.safetyModel = car.CarParams.SafetyModel.noOutput
+    pass # CP.safetyModel = car.CarParams.SafetyModel.noOutput
 
   # Write CarParams for radard and boardd safety mode
-  params.put("CarParams", CP.to_bytes())
+  # params.put("CarParams", CP.to_bytes())
   params.put("LongitudinalControl", "1" if CP.openpilotLongitudinalControl else "0")
 
   CC = car.CarControl.new_message()
@@ -558,11 +582,11 @@ def controlsd_thread(sm=None, pm=None, can_sock=None):
   while True:
     start_time = sec_since_boot()
     prof.checkpoint("Ratekeeper", ignore=True)
-
+    print("------------while True 1------------")
     # Sample data and compute car events
     CS, events, cal_perc, mismatch_counter, can_error_counter = data_sample(CI, CC, sm, can_sock, driver_status, state, mismatch_counter, can_error_counter, params)
     prof.checkpoint("Sample")
-
+    print("------------while True 2------------")
     # Create alerts
     if not sm.alive['plan'] and sm.alive['pathPlan']:  # only plan not being received: radar not communicating
       events.append(create_event('radarCommIssue', [ET.NO_ENTRY, ET.SOFT_DISABLE]))
@@ -594,7 +618,7 @@ def controlsd_thread(sm=None, pm=None, can_sock=None):
     # Only allow engagement with brake pressed when stopped behind another stopped car
     if CS.brakePressed and sm['plan'].vTargetFuture >= STARTING_TARGET_SPEED and not CP.radarOffCan and CS.vEgo < 0.3:
       events.append(create_event('noTarget', [ET.NO_ENTRY, ET.IMMEDIATE_DISABLE]))
-
+    print("------------while True 3------------")
     if not read_only:
       # update control state
       state, soft_disable_timer, v_cruise_kph, v_cruise_kph_last = \
@@ -607,13 +631,13 @@ def controlsd_thread(sm=None, pm=None, can_sock=None):
                     driver_status, LaC, LoC, read_only, is_metric, cal_perc, last_blinker_frame)
 
     prof.checkpoint("State Control")
-
+    print("------------while True 4------------")
     # Publish data
     CC, events_prev = data_send(sm, pm, CS, CI, CP, VM, state, events, actuators, v_cruise_kph, rk, AM, driver_status, LaC,
                                 LoC, read_only, start_time, v_acc, a_acc, lac_log, events_prev, last_blinker_frame,
                                 is_ldw_enabled, can_error_counter)
     prof.checkpoint("Sent")
-
+    print("------------while True 5------------")
     rk.monitor_time()
     prof.display()
 

@@ -3,11 +3,12 @@ import requests
 from datetime import datetime, timedelta
 
 from selfdrive.version import version
+from common.basedir import PERSIST
 
 class Api():
   def __init__(self, dongle_id):
     self.dongle_id = dongle_id
-    with open('/persist/comma/id_rsa') as f:
+    with open(PERSIST + '/comma/id_rsa') as f:
       self.private_key = f.read()
 
   def get(self, *args, **kwargs):
