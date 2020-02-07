@@ -169,13 +169,14 @@ class PathPlanner():
     print(self.LP.l_prob)
     print(self.LP.r_prob)
     print(curvature_factor)
-    print(v_ego_mpc)
-    print(self.LP.lane_width)
-    print("------------------MPC State END ----------------")
+
     v_ego_mpc = max(v_ego, 5.0)  # avoid mpc roughness due to low speed
     self.libmpc.run_mpc(self.cur_state, self.mpc_solution,
                         list(self.LP.l_poly), list(self.LP.r_poly), list(self.LP.d_poly),
                         self.LP.l_prob, self.LP.r_prob, curvature_factor, v_ego_mpc, self.LP.lane_width)
+    print(v_ego_mpc)
+    print(self.LP.lane_width)
+    print("------------------MPC State END ----------------")
 
     # reset to current steer angle if not active or overriding
     if active:
@@ -227,6 +228,10 @@ class PathPlanner():
     plan_send.pathPlan.desire = desire
     plan_send.pathPlan.laneChangeState = self.lane_change_state
     plan_send.pathPlan.laneChangeDirection = lane_change_direction
+
+    print("-----------plan_send_start----------------")
+    print(plan_send)
+    print("-----------plan_send_end------------------")
 
     pm.send('pathPlan', plan_send)
 
