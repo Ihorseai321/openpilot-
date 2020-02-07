@@ -12,6 +12,8 @@ from selfdrive.config import RADAR_TO_CAMERA
 from selfdrive.controls.lib.lane_planner import (compute_path_pinv,
                                                  model_polyfit)
 
+#matplotlib.use('QT4Agg')
+
 RED = (255, 0, 0)
 GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
@@ -63,7 +65,7 @@ def to_lid_pt(y, x):
     return int(px), int(py)
   return -1, -1
 
-
+# 
 def draw_path(y, x, color, img, calibration, top_down, lid_color=None):
   # TODO: Remove big box.
   uv_model_real = warp_points(np.column_stack((x, y)), calibration.car_to_model)
@@ -109,8 +111,8 @@ def draw_lead_on(img, closest_x_m, closest_y_m, calibration, color, sz=10, img_o
   return u, v
 
 
-if platform.system() != 'Darwin':
-  matplotlib.use('QT4Agg')
+
+
 
 
 def init_plots(arr, name_to_arr_idx, plot_xlims, plot_ylims, plot_names, plot_colors, plot_styles, bigplots=False):
