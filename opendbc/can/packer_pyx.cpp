@@ -4,19 +4,19 @@
 {
     "distutils": {
         "depends": [
-            "/home/richard/openpilot-release2/opendbc/can/common.h",
-            "/home/richard/openpilot-release2/opendbc/can/common_dbc.h"
+            "/home/richard/git_ws/openpilot-/opendbc/can/common.h",
+            "/home/richard/git_ws/openpilot-/opendbc/can/common_dbc.h"
         ],
         "extra_compile_args": [
             "-std=c++11"
         ],
         "extra_link_args": [
-            "/home/richard/openpilot-release2/opendbc/can/libdbc.so"
+            "/home/richard/git_ws/openpilot-/opendbc/can/libdbc.so"
         ],
         "include_dirs": [
-            "/home/richard/openpilot-release2/opendbc/can",
-            "/home/richard/openpilot-release2",
-            "/home/richard/openpilot-release2/phonelibs/capnp-cpp/include"
+            "/home/richard/git_ws/openpilot-/opendbc/can",
+            "/home/richard/git_ws/openpilot-",
+            "/home/richard/git_ws/openpilot-/phonelibs/capnp-cpp/include"
         ],
         "language": "c++",
         "name": "packer_pyx",

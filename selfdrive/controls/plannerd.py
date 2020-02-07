@@ -128,12 +128,11 @@ def plannerd_thread(sm=None, pm=None):
   intcount = 0
   while True:
     sm.update()
-    print(sm['model'])
     if sm.updated['model']:
-      #print("----------------plannerd-model-updated----------------")
+      print("----------------plannerd-model-updated----------------")
       PP.update(sm, pm, CP, VM)
     if sm.updated['radarState']:
-      #print("----------------plannerd-radarState-updated----------------")
+      print("----------------plannerd-radarState-updated----------------")
       PL.update(sm, pm, CP, VM, PP)
 
 

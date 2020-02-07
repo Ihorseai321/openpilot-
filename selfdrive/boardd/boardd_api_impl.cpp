@@ -15,8 +15,8 @@
         ],
         "library_dirs": [
             "./",
-            "/home/richard/openpilot-release2/phonelibs/capnp-cpp/x64/lib/",
-            "/home/richard/openpilot-release2/phonelibs/capnp-c/x64/lib/"
+            "/home/richard/git_ws/openpilot-/phonelibs/capnp-cpp/x64/lib/",
+            "/home/richard/git_ws/openpilot-/phonelibs/capnp-c/x64/lib/"
         ],
         "name": "boardd_api_impl",
         "sources": [

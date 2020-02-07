@@ -469,7 +469,8 @@ def main():
 
   params = Params()
   params.manager_start()
-
+  
+  
   # set unset params
   if params.get("CommunityFeaturesToggle") is None:
     params.put("CommunityFeaturesToggle", "0")
@@ -503,6 +504,7 @@ def main():
   if params.get("OpenpilotEnabledToggle") is None:
     params.put("OpenpilotEnabledToggle", "1")
 
+
   # is this chffrplus?
   if os.getenv("PASSIVE") is not None:
     params.put("Passive", str(int(os.getenv("PASSIVE"))))
@@ -534,7 +536,6 @@ def main():
     uninstall()
 
 if __name__ == "__main__":
-  print(prebuilt)
   main()
   # manual exit because we are forked
   sys.exit(0)

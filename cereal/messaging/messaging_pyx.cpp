@@ -4,16 +4,16 @@
 {
     "distutils": {
         "depends": [
-            "/home/richard/openpilot-release2/cereal/messaging/messaging.hpp"
+            "/home/richard/git_ws/openpilot-/cereal/messaging/messaging.hpp"
         ],
         "extra_compile_args": [
             "-std=c++11"
         ],
         "extra_objects": [
-            "/home/richard/openpilot-release2/cereal/messaging/../libmessaging.a"
+            "/home/richard/git_ws/openpilot-/cereal/messaging/../libmessaging.a"
         ],
         "include_dirs": [
-            "/home/richard/openpilot-release2/cereal/messaging"
+            "/home/richard/git_ws/openpilot-/cereal/messaging"
         ],
         "language": "c++",
         "libraries": [

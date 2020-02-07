@@ -123,6 +123,9 @@ pycryptodome = "*"
 pillow = "*"
 scons = "*"
 cysignals = "*"
+aenum = "*"
+lru = "*"
+lru-dict = "==1.1.6"
 
 [requires]
 python_version = "3.7.3"

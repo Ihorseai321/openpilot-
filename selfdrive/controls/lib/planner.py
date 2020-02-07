@@ -138,7 +138,7 @@ class Planner():
       path = list(sm['model'].path.poly)
       print("-----------path start------------")
       print(path)
-      print（self.path_x）
+      print(self.path_x)
       print("-----------path start------------")
 
       # Curvature of polynomial https://en.wikipedia.org/wiki/Curvature#Curvature_of_the_graph_of_a_function

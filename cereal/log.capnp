@@ -567,11 +567,11 @@ struct ModelData {
   frameId @0 :UInt32;
   timestampEof @9 :UInt64;
 
-  path @1 :PathData;
-  leftLane @2 :PathData;
-  rightLane @3 :PathData;
-  lead @4 :LeadData;
-  freePath @6 :List(Float32);
+  path @1 :PathData; # 几维
+  leftLane @2 :PathData; # 多少维度
+  rightLane @3 :PathData; # 多少维度
+  lead @4 :LeadData; # 什么意思
+  freePath @6 :List(Float32); # 多少维
 
   settings @5 :ModelSettings;
   leadFuture @7 :LeadData;
