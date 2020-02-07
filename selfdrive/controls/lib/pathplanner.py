@@ -85,6 +85,8 @@ class PathPlanner():
     self.angle_steers_des_prev = self.angle_steers_des_mpc
     VM.update_params(sm['liveParameters'].stiffnessFactor, sm['liveParameters'].steerRatio)
     curvature_factor = VM.curvature_factor(v_ego)
+    #print("---------------angle_steers_des_mpc-----------------")
+    print("angle_steers_des_mpc = %10.3f" %self.angle_steers_des_mpc)
 
     self.LP.parse_model(sm['model'])
 
@@ -160,7 +162,16 @@ class PathPlanner():
 
     # account for actuation delay
     self.cur_state = calc_states_after_delay(self.cur_state, v_ego, angle_steers - angle_offset, curvature_factor, VM.sR, CP.steerActuatorDelay)
-
+    print("------------------MPC State START ----------------")
+    print(self.cur_state)
+    print(self.LP.l_poly)
+    print(self.LP.r_poly)
+    print(self.LP.l_prob)
+    print(self.LP.r_prob)
+    print(curvature_factor)
+    print(v_ego_mpc)
+    print(self.LP.lane_width)
+    print("------------------MPC State END ----------------")
     v_ego_mpc = max(v_ego, 5.0)  # avoid mpc roughness due to low speed
     self.libmpc.run_mpc(self.cur_state, self.mpc_solution,
                         list(self.LP.l_poly), list(self.LP.r_poly), list(self.LP.d_poly),
