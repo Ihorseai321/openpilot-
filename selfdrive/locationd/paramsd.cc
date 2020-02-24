@@ -65,19 +65,17 @@ int main(int argc, char *argv[]) {
   cereal::CarParams::Reader car_params = cmsg.getRoot<cereal::CarParams>();
 
   // Read params from previous run
+  LOGW("Read params from previous run");
   const int result = read_db_value(NULL, "LiveParameters", &value, &value_sz);
-
   std::string fingerprint = car_params.getCarFingerprint();
   std::string vin = car_params.getCarVin();
   double sR = car_params.getSteerRatio();
   double x = 1.0;
   double ao = 0.0;
   double posenet_invalid_count = 0;
-
   if (result == 0){
     auto str = std::string(value, value_sz);
     free(value);
-
     std::string err;
     auto json = json11::Json::parse(str, err);
     if (json.is_null() || !err.empty()) {
@@ -97,18 +95,14 @@ int main(int argc, char *argv[]) {
       }
     }
   }
-
   ParamsLearner learner(car_params, ao, x, sR, 1.0);
-
   // Main loop
   int save_counter = 0;
   while (true){
     for (auto s : poller->poll(100)){
       Message * msg = s->receive();
-
       auto amsg = kj::heapArray<capnp::word>((msg->getSize() / sizeof(capnp::word)) + 1);
       memcpy(amsg.begin(), msg->getData(), msg->getSize());
-
       capnp::FlatArrayMessageReader capnp_msg(amsg);
       cereal::Event::Reader event = capnp_msg.getRoot<cereal::Event>();
 
@@ -127,14 +121,11 @@ int main(int argc, char *argv[]) {
 
         double yaw_rate = -localizer.x[0];
         bool valid = learner.update(yaw_rate, localizer.car_speed, localizer.steering_angle);
-
         // TODO: Fix in replay
         double sensor_data_age = localizer.controls_state_time - localizer.sensor_data_time;
         double camera_odometry_age = localizer.controls_state_time - localizer.camera_odometry_time;
-
         double angle_offset_degrees = RADIANS_TO_DEGREES * learner.ao;
         double angle_offset_average_degrees = RADIANS_TO_DEGREES * learner.slow_ao;
-
         capnp::MallocMessageBuilder msg;
         cereal::Event::Builder event = msg.initRoot<cereal::Event>();
         event.setLogMonoTime(nanos_since_boot());

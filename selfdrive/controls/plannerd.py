@@ -125,14 +125,11 @@ def plannerd_thread(sm=None, pm=None):
   sm['liveParameters'].steerRatio = CP.steerRatio
   sm['liveParameters'].stiffnessFactor = 1.0
   
-  intcount = 0
   while True:
     sm.update()
     if sm.updated['model']:
-      print("----------------plannerd-model-updated----------------")
       PP.update(sm, pm, CP, VM)
     if sm.updated['radarState']:
-      print("----------------plannerd-radarState-updated----------------")
       PL.update(sm, pm, CP, VM, PP)
 
 

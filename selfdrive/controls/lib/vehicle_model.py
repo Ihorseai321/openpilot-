@@ -198,9 +198,9 @@ class VehicleModel():
 
 if __name__ == '__main__':
   import math
-  from selfdrive.car.honda.interface import CarInterface
-  from selfdrive.car.honda.values import CAR
+  from selfdrive.car.ford.interface import CarInterface
+  from selfdrive.car.ford.values import CAR
 
-  CP = CarInterface.get_params(CAR.CIVIC)
+  CP = CarInterface.get_params(CAR.FUSION)
   VM = VehicleModel(CP)
   print(VM.yaw_rate(math.radians(20), 10.))

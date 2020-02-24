@@ -9,6 +9,8 @@ from selfdrive.config import Conversions as CV
 import cereal.messaging as messaging
 from cereal import log
 
+# from selfdrive.controls.lib.test import lib_pp_test
+
 LaneChangeState = log.PathPlan.LaneChangeState
 LaneChangeDirection = log.PathPlan.LaneChangeDirection
 
@@ -38,10 +40,10 @@ DESIRES = {
   },
 }
 
-def calc_states_after_delay(states, v_ego, steer_angle, curvature_factor, steer_ratio, delay):
-  states[0].x = v_ego * delay
-  states[0].psi = v_ego * curvature_factor * math.radians(steer_angle) / steer_ratio * delay
-  return states
+# def calc_states_after_delay(states, v_ego, steer_angle, curvature_factor, steer_ratio, delay):
+#   states[0].x = v_ego * delay
+#   states[0].psi = v_ego * curvature_factor * math.radians(steer_angle) / steer_ratio * delay
+#   return states
 
 
 class PathPlanner():
@@ -161,7 +163,8 @@ class PathPlanner():
     #   self.path_offset_i = 0.0
 
     # account for actuation delay
-    self.cur_state = calc_states_after_delay(self.cur_state, v_ego, angle_steers - angle_offset, curvature_factor, VM.sR, CP.steerActuatorDelay)
+    # self.cur_state = calc_states_after_delay(self.cur_state, v_ego, angle_steers - angle_offset, curvature_factor, VM.sR, CP.steerActuatorDelay)
+    self.libmpc.calc_states_after_delay(self.cur_state, v_ego, angle_steers - angle_offset, curvature_factor, VM.sR, CP.steerActuatorDelay)
     print("------------------MPC State START ----------------")
     print(self.cur_state)
     print(self.LP.l_poly)

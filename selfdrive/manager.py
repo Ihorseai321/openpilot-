@@ -176,10 +176,13 @@ kill_processes = ['sensord', 'paramsd']
 green_temp_processes = ['uploader']
 
 persistent_processes = [
-  'thermald',
-  'logmessaged',
-  'uploader',
+  'logmessaged'
 ]
+# persistent_processes = [
+#   'thermald',
+#   'logmessaged',
+#   'uploader',
+# ]
 if ANDROID:
   persistent_processes += [
     'logcatd',
@@ -188,17 +191,26 @@ if ANDROID:
   ]
 
 car_started_processes = [
-  'controlsd',
   'plannerd',
   'loggerd',
-  'radard',
   'calibrationd',
   'paramsd',
   'camerad',
   'modeld',
-  'proclogd',
-  'ubloxd',
+  'proclogd'
 ]
+# car_started_processes = [
+#   'controlsd',
+#   'plannerd',
+#   'loggerd',
+#   'radard',
+#   'calibrationd',
+#   'paramsd',
+#   'camerad',
+#   'modeld',
+#   'proclogd',
+#   'ubloxd',
+# ]
 if ANDROID:
   car_started_processes += [
     'sensord',
@@ -413,8 +425,8 @@ def manager_thread():
     if msg.thermal.freeSpace < 0.05:
       logger_dead = True
 
-    if True:
-    # if msg.thermal.started:
+    #if True:
+    if msg.thermal.started:
 
       for p in car_started_processes:
         if p == "loggerd" and logger_dead:

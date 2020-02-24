@@ -12,6 +12,7 @@
 #define NYN         ACADO_NYN /* Number of measurements/references on node N. */
 
 #define N           ACADO_N   /* Number of intervals in the horizon. */
+#define DEG_TO_RAD 3.1415926535898 / 180
 
 ACADOvariables acadoVariables;
 ACADOworkspace acadoWorkspace;
@@ -74,7 +75,7 @@ int run_mpc(state_t * x0, log_t * solution,
              double l_poly[4], double r_poly[4], double d_poly[4],
              double l_prob, double r_prob, double curvature_factor, double v_ref, double lane_width){
 
-  int    i;
+  int i;
 
   for (i = 0; i <= NOD * N; i+= NOD){
     acadoVariables.od[i] = curvature_factor;
@@ -131,4 +132,10 @@ int run_mpc(state_t * x0, log_t * solution,
   //acado_shiftControls( 0 );
 
   return acado_getNWSR();
+}
+
+void calc_states_after_delay(state_t *states, float v_ego, float steer_angle, float curvature_factor, float steer_ratio, float delay)
+{
+    states->x = v_ego * delay;
+    states->psi = v_ego * curvature_factor * steer_angle * DEG_TO_RAD / steer_ratio * delay;
 }

@@ -25,6 +25,7 @@ void init_weights(double pathCost, double laneCost, double headingCost, double s
 int run_mpc(state_t * x0, log_t * solution,
              double l_poly[4], double r_poly[4], double d_poly[4],
              double l_prob, double r_prob, double curvature_factor, double v_ref, double lane_width);
+void calc_states_after_delay(state_t *states, float v_ego, float steer_angle, float curvature_factor, float steer_ratio, float delay);
 """)
 
 libmpc = ffi.dlopen(libmpc_fn)
