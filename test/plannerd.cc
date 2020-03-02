@@ -6,7 +6,7 @@
 
 #include <capnp/message.h>
 #include <capnp/serialize-packed.h>
-#include "cereal/gen/cpp/log.capnp.h"
+#include "log.capnp.h"
 #include "messaging.hpp"
 #include "pathplanner.h"
 #include "planner.h"

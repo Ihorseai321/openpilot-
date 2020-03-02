@@ -3,7 +3,7 @@
 #include <capnp/message.h>
 #include <capnp/serialize-packed.h>
 #include "cereal/gen/cpp/log.capnp.h"
-
+#include "utils.h"
 
 // mat1(4, 4) * mat2(4, 50) => result(4, 50)
 static void matrix_mul_4_450(float mat1[4][4], float mat2[4][50], float result[4][50])
@@ -337,25 +337,6 @@ int compute_path_pinv(float pinv1[4][50])
     }
 
     return 0; 
-}
-
-float interp(float x, float xp[], float fp[], int n)
-{
-    int hi = 0;
-
-    while(hi < n && x > xp[hi]){
-        hi += 1;
-    }
-
-    int low = hi -1;
-    if(hi == n && x > xp[low]){
-      return fp[n-1];
-    }else if (hi == 0)
-    {
-      return fp[0];
-    }else{
-      return (x - xp[low]) * (fp[hi] - fp[low]) / (xp[hi] - xp[low]) + fp[low];
-    }  
 }
 
 void model_polyfit(float points[N], float path_pinv[M][N], float ret[M])

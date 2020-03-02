@@ -120,6 +120,14 @@ env = Environment(
     "#cereal/messaging",
     "#cereal",
     "#opendbc/can",
+    "#selfdrive/c++controls/lib/longitudinal_mpc/lib_mpc_export",
+    "#selfdrive/c++controls/lib/lateral_mpc/lib_mpc_export"
+    "#phonelibs/acado/include",
+    "#phonelibs/acado/include/acado",
+    "#phonelibs/qpoases/INCLUDE",
+    "#phonelibs/qpoases/INCLUDE/EXTRAS",
+    "#phonelibs/qpoases/SRC/",
+    "#phonelibs/qpoases",
   ],
 
   CC='clang',
@@ -135,6 +143,8 @@ env = Environment(
     "#cereal",
     "#selfdrive/common",
     "#phonelibs",
+    "#selfdrive/c++controls/lib/longitudinal_mpc/",
+    "#selfdrive/c++controls/lib/lateral_mpc/"
   ]
 )
 
@@ -213,5 +223,11 @@ if arch == "aarch64":
   SConscript(['selfdrive/clocksd/SConscript'])
 
 SConscript(['selfdrive/locationd/SConscript'])
+
+SConscript(['selfdrive/c++controls/lib/lateral_mpc/SConscript'])
+SConscript(['selfdrive/c++controls/lib/longitudinal_mpc/SConscript'])
+# SConscript(['selfdrive/c++controls/lib/cluster/SConscript'])
+
+SConscript(['selfdrive/c++controls/SConscript'])
 
 # TODO: finish cereal, dbcbuilder, MPC

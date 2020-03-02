@@ -5,7 +5,7 @@
 const float CAMERA_OFFSET = 0.06;
 
 int compute_path_pinv(float pinv1[4][50]);
-float interp(float x, float xp[], float fp[], int n);
+// float interp(float x, float xp[], float fp[], int n);
 void model_polyfit(float points[], float path_pinv[4][50], float ret[]);
 void calc_d_poly(float l_poly[], float r_poly[], float p_poly[], float l_prob, float r_prob, float lane_width, float d_poly[]);
 

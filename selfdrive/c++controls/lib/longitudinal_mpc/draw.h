@@ -1,0 +1,1 @@
+void draw(int a);

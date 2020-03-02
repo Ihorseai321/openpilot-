@@ -18,7 +18,7 @@
 #define DEG_TO_RAD 0.01745329
 #define RAD_TO_DEG 57.29577957
 
-LOG_MPC = std::getenv('LOG_MPC') ? true : false;
+bool LOG_MPC = std::getenv('LOG_MPC') ? true : false;
 
 float LANE_CHANGE_SPEED_MIN = 45 * MPH_TO_MS;
 float LANE_CHANGE_TIME_MAX = 10.0;

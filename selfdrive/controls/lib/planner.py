@@ -121,6 +121,7 @@ class Planner():
     v_ego = sm['carState'].vEgo
 
     long_control_state = sm['controlsState'].longControlState
+    print("----------------long_control_state----------------%s"%long_control_state)
     v_cruise_kph = sm['controlsState'].vCruise
     force_slow_decel = sm['controlsState'].forceDecel
     v_cruise_setpoint = v_cruise_kph * CV.KPH_TO_MS
@@ -136,10 +137,6 @@ class Planner():
 
     if len(sm['model'].path.poly):
       path = list(sm['model'].path.poly)
-      print("-----------path start------------")
-      print(path)
-      print(self.path_x)
-      print("-----------path start------------")
 
       # Curvature of polynomial https://en.wikipedia.org/wiki/Curvature#Curvature_of_the_graph_of_a_function
       # y = a x^3 + b x^2 + c x + d, y' = 3 a x^2 + 2 b x + c, y'' = 6 a x + 2 b
@@ -157,7 +154,8 @@ class Planner():
       model_speed = MAX_SPEED
 
     # Calculate speed for normal cruise control
-    if enabled and not self.first_loop:
+    print("----------------enabled-----------: %s"%enabled)
+    if True:#enabled and not self.first_loop:
       accel_limits = [float(x) for x in calc_cruise_accel_limits(v_ego, following)]
       print("-------following state--------")
       print(following)
@@ -174,16 +172,21 @@ class Planner():
                                                     accel_limits_turns[1], accel_limits_turns[0],
                                                     jerk_limits[1], jerk_limits[0],
                                                     LON_MPC_STEP)
-
+      print("---------------->speed_smoother params<----------------")
+      print(self.v_acc_start, self.a_acc_start, v_cruise_setpoint, accel_limits_turns[1], accel_limits_turns[0], jerk_limits[1], jerk_limits[0], LON_MPC_STEP)
+      print("----------------<speed_smoother params end>----------------")
       self.v_model, self.a_model = speed_smoother(self.v_acc_start, self.a_acc_start,
                                                     model_speed,
                                                     2*accel_limits[1], accel_limits[0],
                                                     2*jerk_limits[1], jerk_limits[0],
                                                     LON_MPC_STEP)
-
+      print("---------------->speed_smoother params2<----------------")
+      print(self.v_acc_start, self.a_acc_start, model_speed, 2*accel_limits[1], accel_limits[0], 2*jerk_limits[1], jerk_limits[0], LON_MPC_STEP)
+      print("----------------<speed_smoother params2 end>----------------")
       # cruise speed can't be negative even is user is distracted
       self.v_cruise = max(self.v_cruise, 0.)
     else:
+      print("else")
       starting = long_control_state == LongCtrlState.starting
       a_ego = min(sm['carState'].aEgo, 0.0)
       reset_speed = MIN_CAN_SPEED if starting else v_ego

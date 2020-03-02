@@ -2,26 +2,9 @@
 #define HANDLER_H_
 
 #include "cereal/gen/cpp/log.capnp.h"
+#include "utils.h"
 
 #define DEGREES_TO_RADIANS 0.017453292519943295
-
-struct LeadData {
-    float dRel;
-    float yRel;
-    float vRel;
-    float aRel;
-    float vLead;
-    float aLeadDEPRECATED;
-    float dPath;
-    float vLat;
-    float vLeadK;
-    float aLeadK;
-    bool fcw;
-    bool status;
-    float aLeadTau;
-    float modelProb;
-    bool radar;
-}
 
 class Handler
 {

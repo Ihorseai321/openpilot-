@@ -1,0 +1,44 @@
+Import('env', 'common', 'messaging')
+
+# cpp_path = [
+#     "#phonelibs/acado/include",
+#     "#phonelibs/acado/include/acado",
+#     "#phonelibs/qpoases/INCLUDE",
+#     "#phonelibs/qpoases/INCLUDE/EXTRAS",
+#     "#phonelibs/qpoases/SRC/",
+#     "#phonelibs/qpoases",
+#     "lib/lateral_mpc/lib_mpc_export",
+#     "lib/longitudinal_mpc/lib_mpc_export",
+# ]
+
+loc_objs = [
+  "plannerd.cc",
+  "lib/handler.cc",
+  "lib/lateral_mpc/lateral_mpc.cc",
+  "lib/longitudinal_mpc/longitudinal_mpc.cc",
+  "lib/pathplanner.cc",
+  "lib/vehicle_model.cc",
+  "lib/planner.cc",
+  "lib/long_mpc.cc",
+  "lib/fcw.cc",
+  "lib/lane_planner.cc",
+  "lib/utils.cc"
+]
+
+# lat_interface_dir = Dir('lib/lateral_mpc/lib_mpc_export')
+# lon_interface_dir = Dir('lib/longitudinal_mpc/lib_mpc_export')
+
+# SConscript(['#phonelibs/qpoases/SConscript'], variant_dir='lib/lateral_mpc/lib_qp', exports=['lat_interface_dir'])
+# SConscript(['#phonelibs/qpoases/SConscript'], variant_dir='lib/longitudinal_mpc/lib_qp', exports=['lon_interface_dir'])
+
+loc_libs = [messaging, 'zmq', 'capnp', 'kj', 'pthread', 'm', 'lateralmpc', 'longmpc']
+env.Program("plannerd", loc_objs, LIBS=loc_libs, LIBPATH=['#selfdrive/c++controls/lib/lateral_mpc/', '#selfdrive/c++controls/lib/longitudinal_mpc/'])
+
+# env.Program("pub_test", [
+#   "pub_test.cc"],
+#   LIBS=loc_libs)
+
+  
+
+
+

@@ -97,3 +97,6 @@ def speed_smoother(vEgo, aEgo, vT, aMax, aMin, jMax, jMin, ts):
   aEgo *= -1 if flipped else 1
 
   return float(vEgo), float(aEgo)
+
+if __name__ == '__main__':
+  print(speed_smoother(0.0, 0.0, 15.833333333333334, 0.8968303686343365, -0.5803317670822143, 0.8968303686343365, -0.5803317670822143, 0.2))

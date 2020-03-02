@@ -33,6 +33,7 @@ class FCWChecker():
     # This helps underweighting ARel when v_lead is close to zero.
     t_decel = 2.
     a_rel = np.minimum(a_rel, v_lead / t_decel)
+    print("----------------fcw----%s------------"%a_rel)
 
     # delta of the quadratic equation to solve for ttc
     delta = v_rel**2 + 2 * x_lead * a_rel

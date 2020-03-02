@@ -3,10 +3,6 @@
 
 PathPlanner::PathPlanner()
 {
-    MPC_COST_LAT_PATH = 1.0;
-    MPC_COST_LAT_LANE = 3.0;
-    MPC_COST_LAT_HEADING = 1.0;
-    MPC_COST_LAT_STEER_RATE = 1.0;
     last_cloudlog_t = 0;
     steer_rate_cost = CP.steerRateCost;
 

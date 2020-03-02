@@ -27,9 +27,10 @@ public:
     int safetyModel = 6;
     bool dashcamOnly = true;
 
+    float radarTimeStep = 0.05; //time delta between radar updates, 20Hz is very standard
+
     // pedal
     bool enableCruise = true;
-
     float wheelbase = 2.85;
     float steerRatio = 14.8;
     float mass = 3045.0 * LB_TO_KG + STD_CARGO_KG;
