@@ -133,8 +133,8 @@ managed_processes = {
   "uploader": "selfdrive.loggerd.uploader",
   "deleter": "selfdrive.loggerd.deleter",
   "controlsd": "selfdrive.controls.controlsd",
-  "plannerd": ("selfdrive/c++controls", ["./plannerd"]),
-  # "plannerd": "selfdrive.controls.plannerd",
+  # "plannerd": ("selfdrive/c++controls", ["./plannerd"]),
+  "plannerd": "selfdrive.controls.plannerd",
   "radard": "selfdrive.controls.radard",
   "ubloxd": ("selfdrive/locationd", ["./ubloxd"]),
   "loggerd": ("selfdrive/loggerd", ["./loggerd"]),
@@ -193,6 +193,7 @@ if ANDROID:
 
 car_started_processes = [
   'plannerd',
+  'controlsd',
   'loggerd',
   'calibrationd',
   'paramsd',

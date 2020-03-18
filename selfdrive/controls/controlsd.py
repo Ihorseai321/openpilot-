@@ -473,7 +473,7 @@ def controlsd_thread(sm=None, pm=None, can_sock=None):
   set_realtime_priority(3)
   
   params = Params()
-
+  print('-------------1')
   is_metric = params.get("IsMetric", encoding='utf8') == "1"
   is_ldw_enabled = params.get("IsLdwEnabled", encoding='utf8') == "1"
   passive = params.get("Passive", encoding='utf8') == "1"
@@ -506,6 +506,7 @@ def controlsd_thread(sm=None, pm=None, can_sock=None):
   #CI, CP = get_car(can_sock, pm.sock['sendcan'], has_relay)
   CP = car.CarParams.from_bytes(params.get("CarParams", block=True))
   CI = get_CI(CP)
+  print("------------CI.compute_gb------------%s"%CI.compute_gb)
 
   car_recognized = CP.carName != 'mock'
   # If stock camera is disconnected, we loaded car controls and it's not chffrplus
@@ -526,6 +527,7 @@ def controlsd_thread(sm=None, pm=None, can_sock=None):
   AM.add(sm.frame, startup_alert, False)
 
   LoC = LongControl(CP, CI.compute_gb)
+  print("------------CI.compute_gb------------%s"%CI.compute_gb)
   VM = VehicleModel(CP)
 
   if CP.lateralTuning.which() == 'pid':

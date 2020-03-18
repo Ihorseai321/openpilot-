@@ -116,22 +116,22 @@ class Planner():
 
   def update(self, sm, pm, CP, VM, PP):
     """Gets called when new radarState is available"""
-    print("----------------planner.update----------------")
+    # print("----------------planner.update----------------")
     cur_time = sec_since_boot()
     v_ego = sm['carState'].vEgo
 
     long_control_state = sm['controlsState'].longControlState
-    print("----------------long_control_state----------------%s"%long_control_state)
+    # print("----------------long_control_state----------------%s"%long_control_state)
     v_cruise_kph = sm['controlsState'].vCruise
     force_slow_decel = sm['controlsState'].forceDecel
     v_cruise_setpoint = v_cruise_kph * CV.KPH_TO_MS
 
     lead_1 = sm['radarState'].leadOne
     lead_2 = sm['radarState'].leadTwo
-    print("-------radarState----------")
-    print(lead_1)
-    print(lead_2)
-    print("-------radarState----------")
+    # print("-------radarState----------")
+    # print(lead_1)
+    # print(lead_2)
+    # print("-------radarState----------")
     enabled = (long_control_state == LongCtrlState.pid) or (long_control_state == LongCtrlState.stopping)
     following = lead_1.status and lead_1.dRel < 45.0 and lead_1.vLeadK > v_ego and lead_1.aLeadK > 0.0
 
@@ -154,11 +154,11 @@ class Planner():
       model_speed = MAX_SPEED
 
     # Calculate speed for normal cruise control
-    print("----------------enabled-----------: %s"%enabled)
+    # print("----------------enabled-----------: %s"%enabled)
     if True:#enabled and not self.first_loop:
       accel_limits = [float(x) for x in calc_cruise_accel_limits(v_ego, following)]
-      print("-------following state--------")
-      print(following)
+      # print("-------following state--------")
+      # print(following)
       jerk_limits = [min(-0.1, accel_limits[0]), max(0.1, accel_limits[1])]  # TODO: make a separate lookup for jerk tuning
       accel_limits_turns = limit_accel_in_turns(v_ego, sm['carState'].steeringAngle, accel_limits, self.CP)
 
@@ -172,21 +172,21 @@ class Planner():
                                                     accel_limits_turns[1], accel_limits_turns[0],
                                                     jerk_limits[1], jerk_limits[0],
                                                     LON_MPC_STEP)
-      print("---------------->speed_smoother params<----------------")
-      print(self.v_acc_start, self.a_acc_start, v_cruise_setpoint, accel_limits_turns[1], accel_limits_turns[0], jerk_limits[1], jerk_limits[0], LON_MPC_STEP)
-      print("----------------<speed_smoother params end>----------------")
+      # print("---------------->speed_smoother params<----------------")
+      # print(self.v_acc_start, self.a_acc_start, v_cruise_setpoint, accel_limits_turns[1], accel_limits_turns[0], jerk_limits[1], jerk_limits[0], LON_MPC_STEP)
+      # print("----------------<speed_smoother params end>----------------")
       self.v_model, self.a_model = speed_smoother(self.v_acc_start, self.a_acc_start,
                                                     model_speed,
                                                     2*accel_limits[1], accel_limits[0],
                                                     2*jerk_limits[1], jerk_limits[0],
                                                     LON_MPC_STEP)
-      print("---------------->speed_smoother params2<----------------")
-      print(self.v_acc_start, self.a_acc_start, model_speed, 2*accel_limits[1], accel_limits[0], 2*jerk_limits[1], jerk_limits[0], LON_MPC_STEP)
-      print("----------------<speed_smoother params2 end>----------------")
+      # print("---------------->speed_smoother params2<----------------")
+      # print(self.v_acc_start, self.a_acc_start, model_speed, 2*accel_limits[1], accel_limits[0], 2*jerk_limits[1], jerk_limits[0], LON_MPC_STEP)
+      # print("----------------<speed_smoother params2 end>----------------")
       # cruise speed can't be negative even is user is distracted
       self.v_cruise = max(self.v_cruise, 0.)
     else:
-      print("else")
+      # print("else")
       starting = long_control_state == LongCtrlState.starting
       a_ego = min(sm['carState'].aEgo, 0.0)
       reset_speed = MIN_CAN_SPEED if starting else v_ego
@@ -254,7 +254,7 @@ class Planner():
 
     # Send out fcw
     plan_send.plan.fcw = fcw
-    print("----------------planner.py : %s", plan_send.plan.fcw)
+    # print("----------------planner.py : %s", plan_send.plan.fcw)
     pm.send('plan', plan_send)
 
     # Interpolate 0.05 seconds and save as starting point for next iteration

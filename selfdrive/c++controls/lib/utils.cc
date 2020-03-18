@@ -58,3 +58,56 @@ float min_array(float array[], int len)
     // printf("%d\n", c_t);
     return min_total;
 }
+
+float clip(float x, float lo, float hi)
+{
+    float _min = x < hi ? x : hi;
+    return lo > _min ? lo : _min;
+}
+
+float sign(float x)
+{
+    if(x == 0){
+        return 0;
+    }
+    else if(x > 0){
+        return 1;
+    }else{
+        return -1;
+    }
+}
+
+float _fabs(float f)
+{
+    if(f < 0){
+        return -f;
+    }
+    else{
+        return f;
+    }
+}
+
+void matrix_mul(int row, int col, int m,float *mat1, float *mat2, float *ret)
+{
+    for (int i = 0; i < row; ++i) {
+        for (int j = 0; j < col; ++j) {
+            for (int k = 0; k < m; ++k) {
+                // printf("%f ,%f\n", mat1[i * m + k], mat2[k * col + j]);
+                ret[i * col + j] += (mat1[i * m + k] * mat2[k * col + j]);
+            }
+            // printf("%f ", ret[i * row + j]);
+        }
+        // printf("\n");
+    }
+}
+
+void matrix_sub(int row, int col, float *A, float *B, float *ret)
+{
+    for (int i = 0; i < row; ++i) {
+        for (int j = 0; j < col; ++j) {
+            ret[i * col + j] = A[i * col + j] - B[i * col + j];
+            // printf("%f ", ret[i * col + j]);
+        }
+        // printf("\n");
+    }
+}

@@ -1,6 +1,7 @@
 #ifndef CARPARAMS_H_
 #define CARPARAMS_H_
 #include <string>
+#include "cereal/gen/cpp/car.capnp.h"
 
 class CarParams
 {
@@ -57,7 +58,7 @@ public:
 
     // no rear steering, at least on the listed cars above
     float steerRatioRear = 0.0;
-    int steerControlType = 1;
+    cereal::CarParams::SteerControlType _steerControlType = cereal::CarParams::SteerControlType::ANGLE;
 
     // steer, gas, brake limitations VS speed
     float steerMaxBP[1] = {0.0};      // breakpoints at 1 and 40 kph
@@ -79,5 +80,23 @@ public:
     float longitudinalTuning_kpV[3] = {3.6, 2.4, 1.5};
     float longitudinalTuning_kiBP[2] = {0.0, 35.0};
     float longitudinalTuning_kiV[2] = {0.54, 0.36};
+    
+    //for toyota RAV4, RAV4H
+    float lateralTuning_lqr_scale = 1500.0;
+    float lateralTuning_lqr_ki = 0.05;
+
+    float lateralTuning_lqr_a[4] = {0., 1., -0.22619643, 1.21822268};
+    float lateralTuning_lqr_b[2] = {-1.92006585e-04, 3.95603032e-05};
+    float lateralTuning_lqr_c[2] = {1., 0.};
+    float lateralTuning_lqr_k[2] = {-110.73572306, 451.22718255};
+    float lateralTuning_lqr_l[2] = {0.3233671, 0.3185757};
+    float lateralTuning_lqr_dcGain = 0.002237852961363602;
+
+    //for toyota PRIUS
+    float lateralTuning_indi_innerLoopGain = 4.0;
+    float lateralTuning_indi_outerLoopGain = 3.0;
+    float lateralTuning_indi_timeConstant = 1.0;
+    float lateralTuning_indi_actuatorEffectiveness = 1.0;
+
 };
 #endif         // CARPARAMS_H_
