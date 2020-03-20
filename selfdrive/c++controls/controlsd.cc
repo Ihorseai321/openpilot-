@@ -89,24 +89,18 @@ bool passive = false;
 bool openpilot_enabled_toggle = true;
 bool community_feature_toggle = false;
 
-std::map <std::string, std::vector<int>> events;
-
-void add_lane_change_event(CHandler chandler)
+void add_lane_change_event(std::vector<CarEvent> &events, CHandler chandler)
 {
-    std::vector<int> type;
     if(chandler.laneChangeState == cereal::PathPlan::LaneChangeState::PRE_LANE_CHANGE){
         if(chandler.laneChangeDirection == cereal::PathPlan::LaneChangeDirection::LEFT){
-            type.push_back(WARNING);
-            events.insert(std::map<std::string, std::vector<int>>::value_type("preLaneChangeLeft", type));
+            events.push_back({preLaneChangeLeft, 0, 0, 1, 0, 0, 0, 0, 0});
         }
         else{
-            type.push_back(WARNING);
-            events.insert(std::map<std::string, std::vector<int>>::value_type("preLaneChangeRight", type));
+            events.push_back({preLaneChangeRight, 0, 0, 1, 0, 0, 0, 0, 0});
         }
     }
     else if(chandler.laneChangeState == cereal::PathPlan::LaneChangeState::LANE_CHANGE_STARTING, cereal::PathPlan::LaneChangeState::LANE_CHANGE_FINISHING){
-        type.push_back(WARNING);
-        events.insert(std::map<std::string, std::vector<int>>::value_type("laneChange", type));
+        events.push_back({laneChange, 0, 0, 1, 0, 0, 0, 0, 0});
     }
 }
 
@@ -141,7 +135,7 @@ std::string drain_sock_raw(SubSocket *sock)
   return ret;
 }
 
-void data_sample(CarInterface CI, CHandler chandler, SubSocket *can_sock, cereal::ControlsState::OpenpilotState state, int &mismatch_counter, int &can_error_counter)
+CARSTATE data_sample(CarInterface CI, CHandler chandler, SubSocket *can_sock, cereal::ControlsState::OpenpilotState state, int &mismatch_counter, int &can_error_counter, int &cal_perc)
 {
     std::vector<int> type;
     // Update carstate from CAN and create events
@@ -149,16 +143,13 @@ void data_sample(CarInterface CI, CHandler chandler, SubSocket *can_sock, cereal
     CARSTATE CS = CI.update(can_strs);
 
     // events = list(CS.events);
-    add_lane_change_event(chandler);
+    add_lane_change_event(CS.events, chandler);
     bool enabled = isEnabled(state);
 
     // Check for CAN timeout
-    if(!can_strs){
+    if(can_strs.empty()){
         can_error_counter += 1;
-        type.push_back(NO_ENTRY);
-        type.push_back(IMMEDIATE_DISABLE);
-        events.insert(std::map<std::string, std::vector<int>>::value_type("canError", type));
-        type.clear();
+        events.push_back({canError, 0, 1, 0, 0, 0, 1, 0, 0});
     }
 
     bool overtemp = chandler.thermalStatus >= cereal::ThermalData::ThermalStatus::RED;
@@ -168,55 +159,36 @@ void data_sample(CarInterface CI, CHandler chandler, SubSocket *can_sock, cereal
 
     // Create events for battery, temperature and disk space
     if(low_battery){
-        type.push_back(NO_ENTRY);
-        type.push_back(SOFT_DISABLE);
-        events.insert(std::map<std::string, std::vector<int>>::value_type("lowBattery", type));
-        type.clear();
+        events.push_back({lowBattery, 0, 1, 0, 0, 1, 0, 0, 0});
     }
 
     if(overtemp){
-        type.push_back(NO_ENTRY);
-        type.push_back(SOFT_DISABLE);
-        events.insert(std::map<std::string, std::vector<int>>::value_type("overheat", type));
-        type.clear();
+        events.push_back({overheat, 0, 1, 0, 0, 1, 0, 0, 0});
     }
 
     if(free_space){
-        type.push_back(NO_ENTRY);
-        events.insert(std::map<std::string, std::vector<int>>::value_type("outOfSpace", type));
-        type.clear();
+        events.push_back({outOfSpace, 0, 1, 0, 0, 0, 0, 0, 0});
     }
 
     if(mem_low){
-        type.push_back(NO_ENTRY);
-        type.push_back(SOFT_DISABLE);
-        type.push_back(PERMANENT);
-        events.insert(std::map<std::string, std::vector<int>>::value_type("lowMemory", type));
-        type.clear();
+        events.push_back({lowMemory, 0, 1, 0, 0, 1, 0, 0, 1});
     }
 
     if(CS.stockAeb){
-        events.insert(std::map<std::string, std::vector<int>>::value_type("stockAeb", type));
+        events.push_back({stockAeb, 0, 0, 0, 0, 0, 0, 0, 0});
     }
 
     // Handle calibration
-    cal_status = chandler.calStatus;
+    int cal_status = chandler.calStatus;
     cal_perc = chandler.calPerc;
 
     int cal_rpy[3] = {0, 0, 0};
     if(cal_status != 1){
         if(cal_status == 0){
-            type.push_back(NO_ENTRY);
-            type.push_back(SOFT_DISABLE);
-            type.push_back(PERMANENT);
-            events.insert(std::map<std::string, std::vector<int>>::value_type("calibrationIncomplete", type));
-            type.clear();
+            events.push_back({calibrationIncomplete, 0, 1, 0, 0, 1, 0, 0, 1});
         }
         else{
-            type.push_back(NO_ENTRY);
-            type.push_back(SOFT_DISABLE);
-            events.insert(std::map<std::string, std::vector<int>>::value_type("calibrationInvalid", type));
-            type.clear();
+            events.push_back({calibrationInvalid, 0, 1, 0, 0, 1, 0, 0, 0});
         }
     }
     else{
@@ -240,20 +212,18 @@ void data_sample(CarInterface CI, CHandler chandler, SubSocket *can_sock, cereal
         mismatch_counter += 1;
     }
     if(mismatch_counter >= 200){
-        type.push_back(IMMEDIATE_DISABLE);
-        events.insert(std::map<std::string, std::vector<int>>::value_type("controlsMismatch", type));
-        type.clear();
+        events.push_back({controlsMismatch, 0, 0, 0, 0, 0, 1, 0, 0});
     }
 
     return CS;
 }
 
-void state_transition(frame, CS, cereal::ControlsState::OpenpilotState state, soft_disable_timer, v_cruise_kph){
+void state_transition(CARSTATE CS, cereal::ControlsState::OpenpilotState &state, int &soft_disable_timer, float &v_cruise_kph, float &v_cruise_kph_last){
 {
   // Compute conditional state transitions and execute actions on state transitions// 
   bool enabled = isEnabled(state);
 
-  float v_cruise_kph_last = v_cruise_kph;
+  v_cruise_kph_last = v_cruise_kph;
 
   // if(stock cruise is completely disabled, then we can use our own set speed logic
   if(CP.enableCruise){
@@ -265,7 +235,7 @@ void state_transition(frame, CS, cereal::ControlsState::OpenpilotState state, so
 
   // decrease the soft disable timer at every step, as it's reset on
   // entrance in SOFT_DISABLING state
-  soft_disable_timer = max(0, soft_disable_timer - 1);
+  soft_disable_timer = 0 < soft_disable_timer - 1 ? soft_disable_timer - 1 : 0;
 
   // DISABLED
   if(state == cereal::ControlsState::OpenpilotState::DISABLED){
@@ -593,12 +563,14 @@ void data_send(PubSocket *car_state_sock, PubSocket *car_control_sock, PubSocket
 int main(int argc, char const *argv[])
 {
     CARCONTROL CC;
+    CARSTATE CS;
     bool has_relay = false;
     
     LongControl LoC;
     LatControlPID LaC;
     CarParams CP;
     VehicleModel VM;
+    CarInterface CI(false);
     CHandler chandler;
     RateKeeper rk(100);
 
@@ -609,11 +581,17 @@ int main(int argc, char const *argv[])
     int mismatch_counter = 0;
     int can_error_counter = 0;
     int last_blinker_frame = 0;
+    int cal_perc = 0;
+
+    bool internet_needed = false;
     
     chandler.calStatus = 2;
     chandler.sensorValid = true;
     chandler.posenetValid = true;
     chandler.freeSpace = 1.0;
+
+    bool read_only = true;
+    bool community_feature_disallowed = false;
 
     Context * c = Context::create();
     SubSocket *thermal_sock = SubSocket::create(c, "thermal");
@@ -665,7 +643,53 @@ int main(int argc, char const *argv[])
 
             double start_time = sec_since_boot();
 
-            data_sample()
+            CS = data_sample(CI, chandler, can_sock, state, mismatch_counter, can_error_counter, cal_perc);
+            
+            if(!chandler.mpcSolutionValid){
+                CS.events.push_back({plannerError, 0, 1, 0, 0, 0, 1, 0, 0});
+            }
+            if(!chandler.sensorValid){
+                CS.events.push_back({sensorDataInvalid, 0, 1, 0, 0, 0, 0, 0, 1});
+            }
+            if(!chandler.paramsValid){
+                CS.events.push_back({vehicleModelInvalid, 0, 0, 1, 0, 0, 0, 0, 0});
+            }
+            if(!chandler.posenetValid){
+                CS.events.push_back({posenetInvalid, 0, 1, 1, 0, 0, 0, 0, 0});
+            }
+            if(!chandler.radarValid){
+                CS.events.push_back({radarFault, 0, 1, 0, 0, 1, 0, 0, 0});
+            }
+            if(chandler.radarCanError){
+               CS.events.push_back({radarCanError, 0, 1, 0, 0, 1, 0, 0, 0});
+            }
+            if(!CS.canValid){
+                CS.events.push_back({canError, 0, 1, 0, 0, 0, 1, 0, 0});
+            }
+            if(!sounds_available){
+                CS.events.push_back({soundsUnavailable, 0, 1, 0, 0, 0, 0, 0, 1});
+            }
+            if(internet_needed){
+                CS.events.push_back({internetConnectivityNeeded, 0, 1, 0, 0, 0, 0, 0, 1});
+            }
+            if(community_feature_disallowed){
+                CS.events.push_back({communityFeatureDisallowed, 0, 0, 0, 0, 0, 0, 0, 1});
+            }
+            if(read_only && !passive){
+                CS.events.push_back({carUnrecognized, 0, 0, 0, 0, 0, 0, 0, 1});
+            }
+
+            // Only allow engagement with brake pressed when stopped behind another stopped car
+            if(CS.brakePressed && chandler.vTargetFuture >= 0.5 && false && CS.vEgo < 0.3){
+                CS.events.push_back({noTarget, 0, 1, 0, 0, 0, 1, 0, 0});
+            }
+
+            if(!read_only){
+                // update control state
+                state, soft_disable_timer, v_cruise_kph, v_cruise_kph_last = state_transition(sm.frame, CS, CP, state, events, soft_disable_timer, v_cruise_kph, AM)
+            }
+      
+
             delete msg;
         }
 
