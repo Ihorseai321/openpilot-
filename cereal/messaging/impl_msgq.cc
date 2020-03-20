@@ -4,7 +4,7 @@
 #include <cstdlib>
 #include <csignal>
 #include <cerrno>
-
+using namespace std;
 
 #include "impl_msgq.hpp"
 
@@ -87,7 +87,7 @@ Message * MSGQSubSocket::receive(bool non_blocking){
   MSGQMessage *r = NULL;
 
   int rc = msgq_msg_recv(&msg, q);
-
+  
   // Hack to implement blocking read with a poller. Don't use this
   while (!non_blocking && rc == 0 && msgq_do_exit == 0){
     msgq_pollitem_t items[1];
@@ -124,7 +124,8 @@ Message * MSGQSubSocket::receive(bool non_blocking){
       r->takeOwnership(msg.data, msg.size);
     }
   }
-
+  
+  cout << "r-----------------> " << r->getSize() << endl;
   return (Message*)r;
 }
 

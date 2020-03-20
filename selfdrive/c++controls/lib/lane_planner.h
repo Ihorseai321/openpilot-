@@ -2,7 +2,7 @@
 #define LANE_PLANNER_H_
 #include "handler.h"
 
-const float CAMERA_OFFSET = 0.06;
+// const float CAMERA_OFFSET = 0.06;
 
 int compute_path_pinv(float pinv1[4][50]);
 // float interp(float x, float xp[], float fp[], int n);

@@ -23,6 +23,45 @@ using namespace std;
 #define PERMANENT 8
 map<string, vector<int>> events;
 
+// capnp::List<cereal::CarEvent>::Builder setEvents()
+// {
+//   capnp::MallocMessageBuilder events_msg;
+//   cereal::Event::Builder event = events_msg.initRoot<cereal::Event>();
+//   event.setLogMonoTime(nanos_since_boot());
+//   auto events_send = event.initCarEvents();
+
+//   capnp::List<cereal::CarEvent>::Builder list;
+//   cereal::CarEvent::Builder car_event(nullptr);
+//   car_event.setName(cereal::CarEvent::EventName::PEDAL_PRESSED); 
+//   car_event.setEnable(true);
+//   list.set(0, car_event);
+//   return list;
+// }
+std::string drain_sock_raw(SubSocket *sock)
+{
+  std::string ret;
+  Message *msg;
+  while(true){
+    if(ret.empty()){
+        msg = sock->receive();
+      // msg->init(sock->receive()->getData(),sock->receive()->getSize());
+        if(msg->getSize() > 0){
+            cout << "sock-----------------> " << msg->getSize() << endl;
+            for(int i = 0; i < msg->getSize(); ++i){
+                ret += msg->getData()[i];
+                // cout << " " << int(sock->receive()->getData()[i]);
+            }
+            // cout << endl;
+        }
+    }
+    else{
+      break;
+    }
+  }
+
+  return ret;
+}
+
 int main(int argc, char const *argv[])
 {
     string name = "preLaneChangeLeft";
@@ -54,6 +93,9 @@ int main(int argc, char const *argv[])
     Poller * poller = Poller::create({car_state_sock, controls_state_sock, radar_state_sock, model_sock, live_parameters_sock});
     
     int running_count = 0;
+
+
+
     while (true){
         for (auto s : poller->poll(100)){
             Message * msg = s->receive();
@@ -69,9 +111,16 @@ int main(int argc, char const *argv[])
                 cout << handler.l_points[i] << ", ";
             }
             cout << endl;
+
+            std::string can_strs = drain_sock_raw(can_sock);
+            cout << "------------>can_strs: " << can_strs.size() << endl;
             cereal::CarEvent::EventName eventname;
             cereal::ControlsState::LongControlState LongCtrlState = cereal::ControlsState::LongControlState::OFF;
-            if(LongCtrlState == cereal::ControlsState::LongControlState::OFF){
+            if(LongCtrlState == (cereal::ControlsState::LongControlState)0){ // cereal::ControlsState::LongControlState::OFF){
+                // cereal::CarEvent::Builder ce(nullptr);
+                // ce = setEvent();
+                // bool enable = ce.getEnable();
+                // cout << "car_event.enable: " << enable << endl;
                 capnp::MallocMessageBuilder cc_msg;
                 cereal::Event::Builder cc_event = cc_msg.initRoot<cereal::Event>();
                 cc_event.setLogMonoTime(nanos_since_boot());

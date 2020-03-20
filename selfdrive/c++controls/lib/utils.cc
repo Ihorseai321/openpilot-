@@ -87,7 +87,7 @@ float _fabs(float f)
     }
 }
 
-void matrix_mul(int row, int col, int m,float *mat1, float *mat2, float *ret)
+void matrix_mul(int row, int col, int m, float *mat1, float *mat2, float *ret)
 {
     for (int i = 0; i < row; ++i) {
         for (int j = 0; j < col; ++j) {

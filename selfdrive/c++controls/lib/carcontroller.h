@@ -1,5 +1,6 @@
 #ifndef CARCONTROLLER_H_
 #define CARCONTROLLER_H_
+
 #include "vehicle_model.h"
 #define MAX_STEER_DELTA 1
 #define TOGGLE_DEBUG false

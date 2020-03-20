@@ -20,7 +20,7 @@ typedef struct{
 class Parser
 {
 public:
-  Parser(std::string dbc_name, std::vector<struct SINGNAL> signals, int bus);
+  Parser(std::string dbc_name, SINGNAL signals[], int bus);
   ~Parser();
   std::unordered_set<uint32_t> update_vl();
   std::unordered_set<uint32_t> update_string(std::string dat, bool sendcan);

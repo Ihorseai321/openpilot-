@@ -14,6 +14,32 @@
 #define IMMEDIATE_DISABLE 7
 #define PERMANENT 8
 
+enum VisualAlert {
+  // these are the choices from the Honda
+  // map as good as you can for your car
+  none;
+  fcw;
+  steerRequired;
+  brakePressed;
+  wrongGear;
+  seatbeltUnbuckled;
+  speedTooHigh;
+  ldw;
+}
+
+enum AudibleAlert {
+  // these are the choices from the Honda
+  // map as good as you can for your car
+  none;
+  chimeEngage;
+  chimeDisengage;
+  chimeError;
+  chimeWarning1;
+  chimeWarning2;
+  chimeWarningRepeat;
+  chimePrompt;
+}
+
 typedef struct{
     // range from 0.0 - 1.0
     float gas;
@@ -32,7 +58,7 @@ typedef struct{
 
 typedef struct{
   bool speedVisible;
-  setSpeed @1: Float32;
+  float setSpeed;
   bool lanesVisible;
   bool leadVisible;
   VisualAlert visualAlert;
@@ -41,33 +67,6 @@ typedef struct{
   bool leftLaneVisible;
   bool rightLaneDepart;
   bool leftLaneDepart;
-
-  enum VisualAlert {
-    // these are the choices from the Honda
-    // map as good as you can for your car
-    none @0;
-    fcw @1;
-    steerRequired @2;
-    brakePressed @3;
-    wrongGear @4;
-    seatbeltUnbuckled @5;
-    speedTooHigh @6;
-    ldw @7;
-  }
-
-  enum AudibleAlert {
-    // these are the choices from the Honda
-    // map as good as you can for your car
-    none @0;
-    chimeEngage @1;
-    chimeDisengage @2;
-    chimeError @3;
-    chimeWarning1 @4;
-    chimeWarning2 @5;
-    chimeWarningRepeat @6;
-    chimePrompt @7;
-  }
-
 }HUDControl;
 
 typedef struct{
@@ -89,6 +88,7 @@ bool is_ldw_enabled = true;
 bool passive = false;
 bool openpilot_enabled_toggle = true;
 bool community_feature_toggle = false;
+
 std::map <std::string, std::vector<int>> events;
 
 void add_lane_change_event(CHandler chandler)
@@ -120,12 +120,33 @@ bool isEnabled(cereal::ControlsState::OpenpilotState state)
     return (isActive(state) || state == cereal::ControlsState::OpenpilotState::PRE_ENABLED);
 }
 
-void data_sample(CarInterface CI, CARCONTROL CC, CHandler chandler, SubSocket *can_sock, cereal::ControlsState::OpenpilotState state, int &mismatch_counter, int &can_error_counter)
+std::string drain_sock_raw(SubSocket *sock)
+{
+  std::string ret;
+  Message *msg;
+  while(true){
+    if(ret.empty()){
+        msg = sock->receive();
+        if(msg->getSize() > 0){
+            for(int i = 0; i < msg->getSize(); ++i){
+                ret += msg->getData()[i];
+            }
+        }
+    }
+    else{
+      break;
+    }
+  }
+
+  return ret;
+}
+
+void data_sample(CarInterface CI, CHandler chandler, SubSocket *can_sock, cereal::ControlsState::OpenpilotState state, int &mismatch_counter, int &can_error_counter)
 {
     std::vector<int> type;
     // Update carstate from CAN and create events
-    // can_strs = messaging.drain_sock_raw(can_sock, wait_for_one=true);
-    // CS = CI.update(can_strs);
+    std::string can_strs = drain_sock_raw(can_sock);
+    CARSTATE CS = CI.update(can_strs);
 
     // events = list(CS.events);
     add_lane_change_event(chandler);
@@ -571,6 +592,29 @@ void data_send(PubSocket *car_state_sock, PubSocket *car_control_sock, PubSocket
 
 int main(int argc, char const *argv[])
 {
+    CARCONTROL CC;
+    bool has_relay = false;
+    
+    LongControl LoC;
+    LatControlPID LaC;
+    CarParams CP;
+    VehicleModel VM;
+    CHandler chandler;
+    RateKeeper rk(100);
+
+    cereal::ControlsState::OpenpilotState state = cereal::ControlsState::OpenpilotState::DISABLED;
+    int soft_disable_timer = 0;
+    float v_cruise_kph = 255;
+    float v_cruise_kph_last = 0;
+    int mismatch_counter = 0;
+    int can_error_counter = 0;
+    int last_blinker_frame = 0;
+    
+    chandler.calStatus = 2;
+    chandler.sensorValid = true;
+    chandler.posenetValid = true;
+    chandler.freeSpace = 1.0;
+
     Context * c = Context::create();
     SubSocket *thermal_sock = SubSocket::create(c, "thermal");
     SubSocket *health_sock = SubSocket::create(c, "health");
@@ -609,29 +653,7 @@ int main(int argc, char const *argv[])
                                       driver_monitoring_sock, plan_sock, path_plan_sock, 
                                       model_sock, gps_location_sock});
 
-    bool has_relay = false;
-    
-    LongControl LoC;
-    LatControlPID LaC;
-    CarParams CP;
-    VehicleModel VM;
-    CHandler chandler;
-
-    cereal::ControlsState::OpenpilotState state = cereal::ControlsState::OpenpilotState::DISABLED;
-    int soft_disable_timer = 0;
-    float v_cruise_kph = 255;
-    float v_cruise_kph_last = 0;
-    int mismatch_counter = 0;
-    int can_error_counter = 0;
-    int last_blinker_frame = 0;
-    
-    chandler.calStatus = 2;
-    chandler.sensorValid = true;
-    chandler.posenetValid = true;
-    chandler.freeSpace = 1.0;
-
     while (true){
-        double start_time = sec_since_boot();
         for (auto s : poller->poll(100)){
             Message * msg = s->receive();
             auto amsg = kj::heapArray<capnp::word>((msg->getSize() / sizeof(capnp::word)) + 1);
@@ -641,7 +663,9 @@ int main(int argc, char const *argv[])
 
             handler.handle_log(event);
 
-      
+            double start_time = sec_since_boot();
+
+            data_sample()
             delete msg;
         }
 

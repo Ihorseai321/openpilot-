@@ -1,6 +1,6 @@
 #include "canparser.h"
 
-Parser::Parser(std::string dbc_name, std::vector<struct SINGNAL> signals, int bus)
+Parser::Parser(std::string dbc_name, SINGNAL signals[], int bus)
 {
   can_valid = true;
   this->dbc_name = dbc_name;
@@ -12,12 +12,12 @@ Parser::Parser(std::string dbc_name, std::vector<struct SINGNAL> signals, int bu
     struct Msg msg = dbc.msgs[i];
     std::string name = msg.name;
 
-    self.msg_name_to_address[name] = msg.address;
-    self.address_to_msg_name[msg.address] = name;
-    self.vl[msg.address] = {};
-    self.vl[name] = {};
-    self.ts[msg.address] = {};
-    self.ts[name] = {};
+    msg_name_to_address[name] = msg.address;
+    address_to_msg_name[msg.address] = name;
+    vl[msg.address] = {};
+    vl[name] = {};
+    ts[msg.address] = {};
+    ts[name] = {};
   }
   
   std::vector<struct SignalParseOptions> signal_options_v;
@@ -25,8 +25,8 @@ Parser::Parser(std::string dbc_name, std::vector<struct SINGNAL> signals, int bu
   
   vector<struct MessageParseOptions> message_options_v;
   struct MessageParseOptions mpo;
-  for(int j = 0; j < signals.size(); ++j){
-    struct SINGNAL s = signals[j];
+  for(int j = 0; j < sizeof(signals)/sizeof(signals[0]); ++j){
+    SINGNAL s = signals[j];
     signals[j] = msg_name_to_address[signals[j].sig_address];
 
     spo.address = signals[j].sig_address;
