@@ -1,10 +1,7 @@
 #include "latcontrol_pid.h"
-#include "utils.h"
 #include "cereal/gen/cpp/car.capnp.h"
 
-LatControlPID::LatControlPID():pid(CP.lateralTuning_pid_kpBP, CP.lateralTuning_pid_kpV,
-                                   CP.lateralTuning_pid_kiBP, CP.lateralTuning_pid_kiV, 100, 
-                                   CP.steerLimitTimer, false, CP.lateralTuning_pid_kf, 1.0, 0.0)
+LatControlPID::LatControlPID():pid(100, CP.steerLimitTimer, false, CP.lateralTuning_pid_kf, 1.0, 0.0)
 {
   angle_steers_des = 0.0;
 }
@@ -35,7 +32,7 @@ LatPIDRet LatControlPID::update(bool active, float v_ego, float angle_steers, fl
   }
   else{
     angle_steers_des = chandler.angleSteers;
-    steers_max = interp(v_ego, CP.steerMaxBP, CP.steerMaxV, ARRAYSIZE(steerMaxBP));
+    steers_max = interp(v_ego, CP.steerMaxBP, CP.steerMaxV, ARRAYSIZE(CP.steerMaxBP));
     pid.pos_limit = steers_max;
     pid.neg_limit = -steers_max;
     steer_feedforward = angle_steers_des;
@@ -48,7 +45,8 @@ LatPIDRet LatControlPID::update(bool active, float v_ego, float angle_steers, fl
 
     deadzone = 0.0;
     check_saturation = v_ego > 10 && !rate_limited && !steer_override;
-    ret.output_steer = pid.update(angle_steers_des, angle_steers, v_ego, deadzone, 
+    ret.output_steer = pid.update(CP.lateralTuning_pid_kpBP, CP.lateralTuning_pid_kpV, CP.lateralTuning_pid_kiBP, 
+                                  CP.lateralTuning_pid_kiV, angle_steers_des, angle_steers, v_ego, deadzone, 
                                   steer_feedforward, false, check_saturation, steer_override);
     ret.pid_log.active = true;
     ret.pid_log.p = pid.p;

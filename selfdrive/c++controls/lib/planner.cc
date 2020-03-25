@@ -10,8 +10,8 @@
 using namespace std;
 
 const float MAX_SPEED = 255.0;
-const float KPH_TO_MS = 0.277777778;
-const float LON_MPC_STEP = 0.2;  // first step is 0.2s
+// const float KPH_TO_MS = 0.277777778;
+// const float LON_MPC_STEP = 0.2;  // first step is 0.2s
 const float MAX_SPEED_ERROR = 2.0;
 const float AWARENESS_DECEL = -0.2;     // car smoothly decel at .2m/s^2 when user is distracted
 const float MIN_CAN_SPEED = 0.3;

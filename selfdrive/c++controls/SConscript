@@ -34,10 +34,32 @@ loc_objs = [
 loc_libs = [messaging, 'zmq', 'capnp', 'kj', 'pthread', 'm', 'lateralmpc', 'longmpc']
 env.Program("plannerd", loc_objs, LIBS=loc_libs, LIBPATH=['#selfdrive/c++controls/lib/lateral_mpc/', '#selfdrive/c++controls/lib/longitudinal_mpc/'])
 
-env.Program("test", [
-  "test.cc",
-  "lib/handler.cc"],
-  LIBS=loc_libs)
+ctl_objs = [
+  "controlsd.cc",
+  "lib/common.cc",
+  "lib/parser.cc",
+  "lib/canparser.cc",
+  "lib/message_state.cc",
+  "lib/dbc.cc",
+  "lib/carstate.cc",
+  "lib/interface.cc",
+  "lib/ctl_handler.cc",
+  "lib/vehicle_model.cc",
+  "lib/kf.cc",
+  "lib/latcontrol_pid.cc",
+  "lib/longcontrol.cc",
+  "lib/utils.cc",
+  "lib/ratekeeper.cc",
+  "lib/pid.cc"
+]
+
+ctl_libs = [messaging, 'zmq', 'capnp', 'kj', 'pthread', 'm']
+env.Program("controlsd", ctl_objs, LIBS=ctl_libs)
+
+# env.Program("test", [
+#   "test.cc",
+#   "lib/handler.cc"],
+#   LIBS=loc_libs)
 
   
 

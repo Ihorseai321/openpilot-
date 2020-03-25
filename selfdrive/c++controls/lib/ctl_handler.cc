@@ -5,7 +5,7 @@
 #include <eigen3/Eigen/Dense>
 #include "common/timing.h"
 #include "cereal/gen/cpp/log.capnp.h"
-#include "controlsd_handler.h"
+#include "ctl_handler.h"
 
 CHandler::CHandler()
 {
@@ -24,7 +24,7 @@ CHandler::CHandler()
   // liveCalibration
   calStatus = 0;
   calPerc = 0;
-  has_rpy = ture;
+  has_rpy = true;
 
   rpyCalib[0] = 0.0;
   rpyCalib[1] = 0.0;
@@ -45,6 +45,7 @@ CHandler::CHandler()
   planMonoTime = 0;
 
   // pathPlan
+  angleSteers = 0.0;
   rProb = 0.0;
   lProb = 0.0;
 
@@ -57,7 +58,6 @@ CHandler::CHandler()
   sensorValid = false;
   posenetValid = false;
   mpcSolutionValid = false;
-  sensorValid = false;
   paramsValid = false;
   laneChangeState = cereal::PathPlan::LaneChangeState::OFF;
   pathPlanMonoTime = 0;
@@ -110,8 +110,11 @@ void CHandler::chandle_live_calibration(cereal::LiveCalibrationData::Reader live
 void CHandler::chandle_driver_monitoring(cereal::DriverMonitoring::Reader driver_monitoring, unsigned long current_time)
 {}
 
-void CHandler::chandle_plan(cereal::Plan::Reader plan, unsigned long current_time)
+void CHandler::chandle_plan(cereal::Plan::Reader plan, unsigned long current_time, int frame)
 {
+  rcv_frame_plan = frame;
+  aStart = plan.getAStart();
+  vStart = plan.getVStart();
   aTarget = plan.getATarget();
   vTarget = plan.getVTarget();
   hasLead = plan.getHasLead();
@@ -130,7 +133,7 @@ void CHandler::chandle_path_plan(cereal::PathPlan::Reader path_plan, unsigned lo
 {
   rProb = path_plan.getRProb();
   lProb = path_plan.getLProb();
-
+  angleSteers = path_plan.getAngleSteers();
   int l_ply = 0;
   for (float _l_poly: path_plan.getLPoly()) {
     lPoly[l_ply++] = _l_poly;
@@ -146,6 +149,7 @@ void CHandler::chandle_path_plan(cereal::PathPlan::Reader path_plan, unsigned lo
   posenetValid = path_plan.getPosenetValid();
   mpcSolutionValid = path_plan.getMpcSolutionValid();
   paramsValid = path_plan.getParamsValid();
+  laneChangeDirection = path_plan.getLaneChangeDirection();
   laneChangeState = path_plan.getLaneChangeState();
   pathPlanMonoTime = current_time;
 }
@@ -155,8 +159,8 @@ void CHandler::chandle_model(cereal::ModelData::Reader model, unsigned long curr
   cereal::ModelData::MetaData::Reader meta = model.getMeta();
   
   int meta_i = 0;
-  has_desirepredict = hasDesirePrediction();
-  if(has_desirepredict){
+  has_meta_desirePrediction = meta.hasDesirePrediction();
+  if(has_meta_desirePrediction){
     for (float desirePrediction: meta.getDesirePrediction()) {
       meta_desirePrediction[meta_i++] = desirePrediction;
     }
@@ -169,14 +173,14 @@ void CHandler::chandle_gps_location(cereal::GpsLocationData::Reader gps_location
   longitude = gps_location.getLongitude();
 }
 
-void CHandler::chandle_log(cereal::Event::Reader event) {
+void CHandler::chandle_log(cereal::Event::Reader event, int frame) {
   unsigned long current_time = event.getLogMonoTime();
   unsigned long rcv_time = nanos_since_boot();
 
   if (prev_update_time < 0) {
     prev_update_time = current_time;
   }
-
+  this->frame = frame;
   auto type = event.which();
   switch(type) {
   case cereal::Event::THERMAL:
@@ -186,13 +190,13 @@ void CHandler::chandle_log(cereal::Event::Reader event) {
     chandle_health(event.getHealth(), current_time);
     break;
   case cereal::Event::LIVE_CALIBRATION:
-    chandle_live_calibration(event.getLiveCalibration(), current_time, rcv_time);
+    chandle_live_calibration(event.getLiveCalibration(), current_time);
     break;
   // case cereal::Event::DRIVER_MONITORING:
   //   chandle_driver_monitoring(event.getDriverMonitoring(), current_time);
   //   break;
   case cereal::Event::PLAN:
-    chandle_plan(event.getPlan(), current_time);
+    chandle_plan(event.getPlan(), current_time, frame);
     break;
   case cereal::Event::PATH_PLAN:
     chandle_path_plan(event.getPathPlan(), current_time);

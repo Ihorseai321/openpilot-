@@ -16,9 +16,7 @@ float MAX_SPEED_ERROR_V[2] = {1.5, 0.8};  // max positive v_pid error VS actual 
 
 float RATE = 100.0;
 
-LongControl::LongControl():pid(CP.lateralTuning.pid.kpBP, CP.lateralTuning.pid.kpV,
-                               CP.lateralTuning.pid.kiBP, CP.lateralTuning.pid.kiV,
-                               100.0, 0.8, true)
+LongControl::LongControl():pid(100.0, 0.8, true)
 {
     long_control_state = cereal::ControlsState::LongControlState::OFF;
     v_pid = 0.0;
@@ -64,7 +62,9 @@ LCtrlRet LongControl::update(bool active, float v_ego, bool brake_pressed, bool 
         bool prevent_overshoot = !CP.stoppingControl && v_ego < 1.5 && v_target_future < 0.7;
         float deadzone = interp(v_ego_pid, CP.longitudinalTuning_deadzoneBP, CP.longitudinalTuning_deadzoneV, 2);
 
-        output_gb = pid.update(v_pid, v_ego_pid, v_ego_pid, deadzone, a_target, prevent_overshoot);
+        output_gb = pid.update(CP.longitudinalTuning_kpBP, CP.longitudinalTuning_kpV, CP.longitudinalTuning_kiBP, 
+                               CP.longitudinalTuning_kiV, v_pid, v_ego_pid, v_ego_pid, deadzone, a_target, 
+                               prevent_overshoot);
 
         if(prevent_overshoot){
             output_gb = std::min(output_gb, float(0.0));

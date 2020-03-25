@@ -1,7 +1,8 @@
+#include <unistd.h> 
 #include "ratekeeper.h"
 #include "utils.h"
 
-RateKeeper::RateKeeper(float rate, float print_delay_threshold)
+RateKeeper::RateKeeper(double rate, double print_delay_threshold)
 {
   _interval = 1.0 / rate;
   _next_frame_time = sec_since_boot() + _interval;
@@ -18,12 +19,12 @@ int RateKeeper::getFrame()
   return _frame;
 }
 
-int remaining()
+int RateKeeper::getremaining()
 {
   return _remaining;
 }
 
-bool keep_time()
+bool RateKeeper::keep_time()
 {
   bool lagged = monitor_time();
   if(_remaining > 0){
@@ -32,7 +33,7 @@ bool keep_time()
   return lagged;
 }
 
-bool monitor_time()
+bool RateKeeper::monitor_time()
 {
   bool lagged = false;
   double remaining = _next_frame_time - sec_since_boot();

@@ -2,17 +2,17 @@
 #include "utils.h"
 
 
-PIController::PIController(float kpBP[], float kpV[], float kiBP[], float kiV[], int rate, float sat_limit, bool convert, float k_f, float pos_limit, float neg_limit)
+PIController::PIController(int rate, float sat_limit, bool convert, float k_f, float pos_limit, float neg_limit)
 {
-    for(int m = 0; m < ARRAYSIZE(kpBP); ++m){
-        this->kpBP[m] = kpBP[m];
-        this->kpV[m] = kpV[m];
-    }
+    // for(int m = 0; m < ARRAYSIZE(kpBP); ++m){
+    //     this->kpBP[m] = kpBP[m];
+    //     this->kpV[m] = kpV[m];
+    // }
 
-    for(int j = 0; j < ARRAYSIZE(kiBP); ++j){
-        this->kiBP[j] = kiBP[j];
-        this->kiV[j] = kiV[j];
-    }
+    // for(int j = 0; j < ARRAYSIZE(kiBP); ++j){
+    //     this->kiBP[j] = kiBP[j];
+    //     this->kiV[j] = kiV[j];
+    // }
 
     this->k_f = k_f;
     this->pos_limit = pos_limit;
@@ -44,15 +44,15 @@ float PIController::car_interface_compute_gb(float accel, float speed)
     return accel / 3.0;
 }
 
-float PIController::get_k_p()
-{
-    return interp(speed, kpBP, kpV, ARRAYSIZE(kpBP));
-}
+// float PIController::get_k_p()
+// {
+//     return interp(speed, kpBP, kpV, ARRAYSIZE(kpBP));
+// }
 
-float PIController::get_k_i()
-{
-    return interp(speed, kiBP, kiV, ARRAYSIZE(kiBP));
-}
+// float PIController::get_k_i()
+// {
+//     return interp(speed, kiBP, kiV, ARRAYSIZE(kiBP));
+// }
 
 float PIController::apply_deadzone(float error, float deadzone)
 {
@@ -84,11 +84,11 @@ bool PIController::_check_saturation(float control, bool check_saturation, float
     return sat_count > sat_limit;
 }
 
-float PIController::update(float setpoint, float measurement, float speed, float deadzone, float feedforward, bool freeze_integrator, bool check_saturation, bool override)
+float PIController::update(float *kpBP, float *kpV, float *kiBP, float *kiV, float setpoint, float measurement, float speed, float deadzone, float feedforward, bool freeze_integrator, bool check_saturation, bool override)
 {
     this->speed = speed;
     float error = apply_deadzone(setpoint - measurement, deadzone);
-    p = error * get_k_p();
+    p = error * interp(speed, kpBP, kpV, ARRAYSIZE(kpBP));
     f = feedforward * k_f;
     float control = 0.0;
     float _i = 0.0;
@@ -97,7 +97,7 @@ float PIController::update(float setpoint, float measurement, float speed, float
         i -= i_unwind_rate * sign(i);
     }
     else{
-        _i = i + error * get_k_i() * i_rate;
+        _i = i + error * interp(speed, kiBP, kiV, ARRAYSIZE(kiBP)) * i_rate;
         control = p + f + _i;
 
         if(convert){

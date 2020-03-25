@@ -1,6 +1,6 @@
 #include "interface.h"
 
-struct SINGNAL signals[14] = {{"WhlRr_W_Meas", "WheelSpeed_CG1", 0.0},
+SIGNAL signals[14] = {{"WhlRr_W_Meas", "WheelSpeed_CG1", 0.0},
                         {"WhlRr_W_Meas", "WheelSpeed_CG1", 0.0},
                         {"WhlRr_W_Meas", "WheelSpeed_CG1", 0.0},
                         {"WhlRr_W_Meas", "WheelSpeed_CG1", 0.0},
@@ -16,7 +16,7 @@ struct SINGNAL signals[14] = {{"WhlRr_W_Meas", "WheelSpeed_CG1", 0.0},
                         {"Brake_Lights", "BCM_to_HS_Body", 0.0}};
 
 
-CarInterface::CarInterface(bool carcontroller):cp("ford_fusion_2018_pt.dbc", signals, 0)
+CarInterface::CarInterface(bool carcontroller):psr("ford_fusion_2018_pt.dbc", signals, 0)
 {
   frame = 0;
   gas_pressed_prev = false;
@@ -24,28 +24,28 @@ CarInterface::CarInterface(bool carcontroller):cp("ford_fusion_2018_pt.dbc", sig
   cruise_enabled_prev = false;
 
   if(carcontroller){
-    CC = new CarController(cp.dbc_name, CP.enableCamera, VM);
+    // CC = new CarController(cp.dbc_name, CP.enableCamera, VM);
   }
 }
 
 CarInterface::~CarInterface()
 {
-  if(CC){
-    delete CC;
-  }
+  // if(CC){
+  //   delete CC;
+  // }
 }
 
-CARSTATE update(std::string can_strings)
+CARSTATE CarInterface::update(std::string can_strings)
 {
   // ******************* do can recv *******************
-  cp.update_strings(can_strings);
+  psr.update_strings(can_strings, false);
 
-  CS.update(cp);
+  CS.update(psr);
 
   // create message
   CARSTATE ret;
 
-  ret.canValid = cp.can_valid;
+  ret.canValid = psr.can_valid;
 
   // speeds
   ret.vEgo = CS.v_ego;
@@ -66,7 +66,7 @@ CARSTATE update(std::string can_strings)
   ret.brakePressed = CS.brake_pressed;
   ret.brakeLights = CS.brake_lights;
 
-  ret.cruiseState.enabled = !(CS.pcm_acc_status in [0, 3]);
+  ret.cruiseState.enabled = !(CS.pcm_acc_status == 0 || CS.pcm_acc_status == 3);
   ret.cruiseState.speed = CS.v_cruise_pcm;
   ret.cruiseState.available = CS.pcm_acc_status != 0;
 
@@ -87,7 +87,7 @@ CARSTATE update(std::string can_strings)
   }
 
   // disable on pedals rising edge or when brake is pressed and speed isn't zero
-  if (ret.gasPressed && !gas_pressed_prev) || (ret.brakePressed && (!brake_pressed_prev || ret.vEgo > 0.001)){
+  if ((ret.gasPressed && !gas_pressed_prev) || (ret.brakePressed && (!brake_pressed_prev || ret.vEgo > 0.001))){
     ret.events.push_back({pedalPressed, 0, 1, 0, 1, 0, 0, 0, 0});
   }
 
@@ -106,4 +106,9 @@ CARSTATE update(std::string can_strings)
   cruise_enabled_prev = ret.cruiseState.enabled;
 
   return ret;
+}
+
+float CarInterface::calc_accel_override(float a_ego, float a_target, float v_ego, float v_target)
+{
+  return 1.0;
 }

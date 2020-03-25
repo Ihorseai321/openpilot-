@@ -3,91 +3,84 @@
 #include <capnp/serialize-packed.h>
 #include "cereal/gen/cpp/log.capnp.h"
 #include "messaging.hpp"
-#include "controlsd_handler.h"
+#include "common/timing.h"
+#include "lib/ctl_handler.h"
 #include "lib/utils.h"
-#define ENABLE 1
-#define PRE_ENABLE 2
-#define NO_ENTRY 3
-#define WARNING 4
-#define USER_DISABLE 5
-#define SOFT_DISABLE 6
-#define IMMEDIATE_DISABLE 7
-#define PERMANENT 8
+#include <cmath>
+#include "lib/interface.h"
+#include "lib/ratekeeper.h"
+#include "lib/longcontrol.h"
+#include "lib/latcontrol_pid.h"
+#include <iostream>
+using namespace std;
+// kph
+#define V_CRUISE_MAX 144
+#define V_CRUISE_MIN 8
+#define V_CRUISE_DELTA 8
+#define V_CRUISE_ENABLE_MIN 40
 
-enum VisualAlert {
-  // these are the choices from the Honda
-  // map as good as you can for your car
-  none;
-  fcw;
-  steerRequired;
-  brakePressed;
-  wrongGear;
-  seatbeltUnbuckled;
-  speedTooHigh;
-  ldw;
-}
-
-enum AudibleAlert {
-  // these are the choices from the Honda
-  // map as good as you can for your car
-  none;
-  chimeEngage;
-  chimeDisengage;
-  chimeError;
-  chimeWarning1;
-  chimeWarning2;
-  chimeWarningRepeat;
-  chimePrompt;
-}
-
-typedef struct{
-    // range from 0.0 - 1.0
-    float gas;
-    float brake;
-    // range from -1.0 - 1.0
-    float steer;
-    float steerAngle;
-}Actuators; 
-
-typedef struct{
-  bool cancel;
-  bool override;
-  float speedOverride;
-  float accelOverride;
-}CruiseControl;
-
-typedef struct{
-  bool speedVisible;
-  float setSpeed;
-  bool lanesVisible;
-  bool leadVisible;
-  VisualAlert visualAlert;
-  AudibleAlert audibleAlert;
-  bool rightLaneVisible;
-  bool leftLaneVisible;
-  bool rightLaneDepart;
-  bool leftLaneDepart;
-}HUDControl;
-
-typedef struct{
-  bool enabled;
-  bool active;
-
-  float gasDEPRECATED;
-  float brakeDEPRECATED;
-  float steeringTorqueDEPRECATED;
-
-  Actuators actuators;
-
-  CruiseControl cruiseControl;
-  HUDControl hudControl;
-}CARCONTROL;
 
 bool is_metric = false;
 bool is_ldw_enabled = true;
 bool passive = false;
 bool openpilot_enabled_toggle = true;
 bool community_feature_toggle = false;
+
+float update_v_cruise(int v_cruise_kph, std::vector<BUTTONEVENT> buttonEvents, bool enabled)
+{
+    for(int i = 0; i < buttonEvents.size(); ++i){
+        if(enabled && !buttonEvents[i].pressed){
+            if(buttonEvents[i].type == accelCruise){
+                v_cruise_kph += V_CRUISE_DELTA - ((int)v_cruise_kph % V_CRUISE_DELTA);
+            }
+            else if(buttonEvents[i].type == decelCruise){
+                v_cruise_kph -= V_CRUISE_DELTA - ((int)(V_CRUISE_DELTA - v_cruise_kph) % V_CRUISE_DELTA);
+            }
+
+            v_cruise_kph = clip(v_cruise_kph, V_CRUISE_MIN, V_CRUISE_MAX);
+        }
+    }
+
+    return v_cruise_kph;
+}
+
+float initialize_v_cruise(float v_ego, std::vector<BUTTONEVENT> buttonEvents, int v_cruise_last)
+{
+    for(int i = 0; i < buttonEvents.size(); ++i){
+        // 250kph or above probably means we never had a set speed
+        if(buttonEvents[i].type == accelCruise && v_cruise_last < 250){
+            return v_cruise_last;
+        }
+    }
+
+    return int(round(clip(v_ego * MS_TO_KPH, V_CRUISE_ENABLE_MIN, V_CRUISE_MAX)));
+}
+
+bool get_events(std::vector<CarEvent> events, int type)
+{
+    for(int i = 0; i < events.size(); ++i){
+        switch(type){
+            case 1: if(events[i].enable == true){ return true;}
+                    break;
+            case 2: if(events[i].noEntry == true){ return true;}
+                    break;
+            case 3: if(events[i].warning == true){ return true;}
+                    break;
+            case 4: if(events[i].userDisable == true){ return true;}
+                    break;
+            case 5: if(events[i].softDisable == true){ return true;}
+                    break;
+            case 6: if(events[i].immediateDisable == true){ return true;}
+                    break;
+            case 7: if(events[i].preEnable == true){ return true;}
+                    break;
+            case 8: if(events[i].permanent == true){ return true;}
+                    break;
+        }
+    }
+
+    return false;
+}
 
 void add_lane_change_event(std::vector<CarEvent> &events, CHandler chandler)
 {
@@ -99,7 +92,7 @@ void add_lane_change_event(std::vector<CarEvent> &events, CHandler chandler)
             events.push_back({preLaneChangeRight, 0, 0, 1, 0, 0, 0, 0, 0});
         }
     }
-    else if(chandler.laneChangeState == cereal::PathPlan::LaneChangeState::LANE_CHANGE_STARTING, cereal::PathPlan::LaneChangeState::LANE_CHANGE_FINISHING){
+    else if(chandler.laneChangeState == cereal::PathPlan::LaneChangeState::LANE_CHANGE_STARTING || chandler.laneChangeState == cereal::PathPlan::LaneChangeState::LANE_CHANGE_FINISHING){
         events.push_back({laneChange, 0, 0, 1, 0, 0, 0, 0, 0});
     }
 }
@@ -137,7 +130,6 @@ std::string drain_sock_raw(SubSocket *sock)
 
 CARSTATE data_sample(CarInterface CI, CHandler chandler, SubSocket *can_sock, cereal::ControlsState::OpenpilotState state, int &mismatch_counter, int &can_error_counter, int &cal_perc)
 {
-    std::vector<int> type;
     // Update carstate from CAN and create events
     std::string can_strs = drain_sock_raw(can_sock);
     CARSTATE CS = CI.update(can_strs);
@@ -149,7 +141,7 @@ CARSTATE data_sample(CarInterface CI, CHandler chandler, SubSocket *can_sock, ce
     // Check for CAN timeout
     if(can_strs.empty()){
         can_error_counter += 1;
-        events.push_back({canError, 0, 1, 0, 0, 0, 1, 0, 0});
+        CS.events.push_back({canError, 0, 1, 0, 0, 0, 1, 0, 0});
     }
 
     bool overtemp = chandler.thermalStatus >= cereal::ThermalData::ThermalStatus::RED;
@@ -159,23 +151,23 @@ CARSTATE data_sample(CarInterface CI, CHandler chandler, SubSocket *can_sock, ce
 
     // Create events for battery, temperature and disk space
     if(low_battery){
-        events.push_back({lowBattery, 0, 1, 0, 0, 1, 0, 0, 0});
+        CS.events.push_back({lowBattery, 0, 1, 0, 0, 1, 0, 0, 0});
     }
 
     if(overtemp){
-        events.push_back({overheat, 0, 1, 0, 0, 1, 0, 0, 0});
+        CS.events.push_back({overheat, 0, 1, 0, 0, 1, 0, 0, 0});
     }
 
     if(free_space){
-        events.push_back({outOfSpace, 0, 1, 0, 0, 0, 0, 0, 0});
+        CS.events.push_back({outOfSpace, 0, 1, 0, 0, 0, 0, 0, 0});
     }
 
     if(mem_low){
-        events.push_back({lowMemory, 0, 1, 0, 0, 1, 0, 0, 1});
+        CS.events.push_back({lowMemory, 0, 1, 0, 0, 1, 0, 0, 1});
     }
 
     if(CS.stockAeb){
-        events.push_back({stockAeb, 0, 0, 0, 0, 0, 0, 0, 0});
+        CS.events.push_back({stockAeb, 0, 0, 0, 0, 0, 0, 0, 0});
     }
 
     // Handle calibration
@@ -185,14 +177,14 @@ CARSTATE data_sample(CarInterface CI, CHandler chandler, SubSocket *can_sock, ce
     int cal_rpy[3] = {0, 0, 0};
     if(cal_status != 1){
         if(cal_status == 0){
-            events.push_back({calibrationIncomplete, 0, 1, 0, 0, 1, 0, 0, 1});
+            CS.events.push_back({calibrationIncomplete, 0, 1, 0, 0, 1, 0, 0, 1});
         }
         else{
-            events.push_back({calibrationInvalid, 0, 1, 0, 0, 1, 0, 0, 0});
+            CS.events.push_back({calibrationInvalid, 0, 1, 0, 0, 1, 0, 0, 0});
         }
     }
     else{
-        if(len(rpy) == 3){
+        if(sizeof(chandler.rpyCalib)/sizeof(chandler.rpyCalib[0]) == 3){
             cal_rpy[0] = chandler.rpyCalib[0];
             cal_rpy[1] = chandler.rpyCalib[1];
             cal_rpy[2] = chandler.rpyCalib[2];
@@ -212,13 +204,13 @@ CARSTATE data_sample(CarInterface CI, CHandler chandler, SubSocket *can_sock, ce
         mismatch_counter += 1;
     }
     if(mismatch_counter >= 200){
-        events.push_back({controlsMismatch, 0, 0, 0, 0, 0, 1, 0, 0});
+        CS.events.push_back({controlsMismatch, 0, 0, 0, 0, 0, 1, 0, 0});
     }
 
     return CS;
 }
 
-void state_transition(CARSTATE CS, cereal::ControlsState::OpenpilotState &state, int &soft_disable_timer, float &v_cruise_kph, float &v_cruise_kph_last){
+cereal::ControlsState::OpenpilotState state_transition(CARSTATE CS, CarParams CP, cereal::ControlsState::OpenpilotState state, int &soft_disable_timer, float &v_cruise_kph, float &v_cruise_kph_last)
 {
   // Compute conditional state transitions and execute actions on state transitions// 
   bool enabled = isEnabled(state);
@@ -239,14 +231,11 @@ void state_transition(CARSTATE CS, cereal::ControlsState::OpenpilotState &state,
 
   // DISABLED
   if(state == cereal::ControlsState::OpenpilotState::DISABLED){
-    if(get_events(events, [ET.ENABLE])){
-      if(get_events(events, [ET.NO_ENTRY])){
-        for e in get_events(events, [ET.NO_ENTRY]){
-          AM.add(frame, str(e) + "NoEntry", enabled);
-        }
+    if(get_events(CS.events, ENABLE)){
+      if(get_events(CS.events, NO_ENTRY)){
       }
       else{
-        if(get_events(events, [ET.PRE_ENABLE])){
+        if(get_events(CS.events, PRE_ENABLE)){
           state = cereal::ControlsState::OpenpilotState::PRE_ENABLED;
         }
         else{
@@ -258,163 +247,95 @@ void state_transition(CARSTATE CS, cereal::ControlsState::OpenpilotState &state,
   }
   // ENABLED
   else if(state == cereal::ControlsState::OpenpilotState::ENABLED){
-    if(get_events(events, [ET.USER_DISABLE])){
+    if(get_events(CS.events, USER_DISABLE)){
       state = cereal::ControlsState::OpenpilotState::DISABLED;
     }
 
-    else if(get_events(events, [ET.IMMEDIATE_DISABLE])){
+    else if(get_events(CS.events, IMMEDIATE_DISABLE)){
       state = cereal::ControlsState::OpenpilotState::DISABLED;
-      for e in get_events(events, [ET.IMMEDIATE_DISABLE]){
-        AM.add(frame, e, enabled);
-      }
     }
-    else if(get_events(events, [ET.SOFT_DISABLE])){
+    else if(get_events(CS.events, SOFT_DISABLE)){
       state = cereal::ControlsState::OpenpilotState::SOFT_DISABLING;
       soft_disable_timer = 300;   // 3s
-      for e in get_events(events, [ET.SOFT_DISABLE]){
-        AM.add(frame, e, enabled);
-      }
     }
   }
   // SOFT DISABLING
   else if(state == cereal::ControlsState::OpenpilotState::SOFT_DISABLING){
-    if(get_events(events, [ET.USER_DISABLE])){
+    if(get_events(CS.events, USER_DISABLE)){
       state = cereal::ControlsState::OpenpilotState::DISABLED;
-      AM.add(frame, "disable", enabled);
     }
-    else if(get_events(events, [ET.IMMEDIATE_DISABLE])){
+    else if(get_events(CS.events, IMMEDIATE_DISABLE)){
       state = cereal::ControlsState::OpenpilotState::DISABLED;
-      for e in get_events(events, [ET.IMMEDIATE_DISABLE]){
-        AM.add(frame, e, enabled);
-      }
     }
-    else if(not get_events(events, [ET.SOFT_DISABLE])){
+    else if(not get_events(CS.events, SOFT_DISABLE)){
       // no more soft disabling condition, so go back to ENABLED
       state = cereal::ControlsState::OpenpilotState::ENABLED;
     }
-    else if(get_events(events, [ET.SOFT_DISABLE]) and soft_disable_timer > 0){
-      for e in get_events(events, [ET.SOFT_DISABLE]){
-        AM.add(frame, e, enabled);
-      }
-    }
-
     else if(soft_disable_timer <= 0){
       state = cereal::ControlsState::OpenpilotState::DISABLED;
     }
   }
   // PRE ENABLING
   else if(state == cereal::ControlsState::OpenpilotState::PRE_ENABLED){
-    if(get_events(events, [ET.USER_DISABLE])){
+    if(get_events(CS.events, USER_DISABLE)){
       state = cereal::ControlsState::OpenpilotState::DISABLED;
-      AM.add(frame, "disable", enabled);
     }
-    else if(get_events(events, [ET.IMMEDIATE_DISABLE, ET.SOFT_DISABLE])){
+    else if(get_events(CS.events, IMMEDIATE_DISABLE) || get_events(CS.events, SOFT_DISABLE)){
       state = cereal::ControlsState::OpenpilotState::DISABLED;
-      for e in get_events(events, [ET.IMMEDIATE_DISABLE, ET.SOFT_DISABLE]){
-        AM.add(frame, e, enabled);
-      }
     }
-    else if(not get_events(events, [ET.PRE_ENABLE])){
+    else if(!get_events(CS.events, PRE_ENABLE)){
       state = cereal::ControlsState::OpenpilotState::ENABLED;
     }
   }
 
-  return state, soft_disable_timer, v_cruise_kph, v_cruise_kph_last;
+  return state;
 }
 
-void state_control(frame, rcv_frame, plan, path_plan, CS, CP, state, events, v_cruise_kph, v_cruise_kph_last,
-                  AM, rk, driver_status, LaC, LoC, read_only, is_metric, cal_perc, last_blinker_frame)
+LATPIDState state_control(CHandler chandler, ACTUATORS &actuators, CARSTATE CS, CarParams CP, cereal::ControlsState::OpenpilotState state, float &v_cruise_kph, float v_cruise_kph_last,
+                   RateKeeper rk, LatControlPID LaC, LongControl LoC, bool read_only, bool is_metric, int cal_perc, int frame, int &last_blinker_frame, float &v_acc_sol, float &a_acc_sol)
 {
   // Given the state, this function returns an actuators packet// 
-
-  actuators = car.CarControl.Actuators.new_message();
-
   bool enabled = isEnabled(state);
   bool active = isActive(state);
 
   // check if user has interacted with the car
-  bool driver_engaged = len(CS.buttonEvents) > 0 || v_cruise_kph != v_cruise_kph_last || CS.steeringPressed;
+  bool driver_engaged = CS.buttonEvents.size() > 0 || v_cruise_kph != v_cruise_kph_last || CS.steeringPressed;
 
   if(CS.leftBlinker || CS.rightBlinker){
     last_blinker_frame = frame;
   }
 
-  // add eventual driver distracted events
-  events = driver_status.update(events, driver_engaged, isActive(state), CS.standstill);
-
-  if(plan.fcw){
-    // send FCW alert if triggered by planner
-    AM.add(frame, "fcw", enabled);
-  }
-  else if(CS.stockFcw){
-    // send a silent alert when stock fcw triggers, since the car is already beeping
-    AM.add(frame, "fcwStock", enabled);
-  // State specific actions
-  }
-
-  if(state in [State.preEnabled, State.disabled]){
+  if(state == cereal::ControlsState::OpenpilotState::PRE_ENABLED || state == cereal::ControlsState::OpenpilotState::DISABLED){
     LaC.reset();
-    LoC.reset(v_pid=CS.vEgo);
-  }
-  else if(state in [State.enabled, State.softDisabling]){
-    // parse warnings from car specific interface
-    for(e in get_events(events, [ET.WARNING])){
-      extra_text = "";
-      if(e == "belowSteerSpeed"){
-        if(is_metric){
-          extra_text = str(int(round(CP.minSteerSpeed * MS_TO_KPH))) + " kph";
-        }
-        else{
-          extra_text = str(int(round(CP.minSteerSpeed * MS_TO_MPH))) + " mph";
-        }
-      }
-      AM.add(frame, e, enabled, extra_text_2=extra_text);
-    }
+    LoC.reset(CS.vEgo);
   }
 
-  plan_age = DT_CTRL * (frame - rcv_frame['plan']);
-  dt = min(plan_age, LON_MPC_STEP + DT_CTRL) + DT_CTRL; // no greater than dt mpc + dt, to prevent too high extraps
+  float plan_age = DT_CTRL * (frame - chandler.rcv_frame_plan);
+  float dt = plan_age < (LON_MPC_STEP + DT_CTRL) ? (plan_age + DT_CTRL) : (LON_MPC_STEP + DT_CTRL + DT_CTRL); // no greater than dt mpc + dt, to prevent too high extraps
 
-  a_acc_sol = plan.aStart + (dt / LON_MPC_STEP) * (plan.aTarget - plan.aStart);
-  v_acc_sol = plan.vStart + dt * (a_acc_sol + plan.aStart) / 2.0;
+  a_acc_sol = chandler.aStart + (dt / LON_MPC_STEP) * (chandler.aTarget - chandler.aStart);
+  v_acc_sol = chandler.vStart + dt * (a_acc_sol + chandler.aStart) / 2.0;
 
   // Gas/Brake PID loop
-  actuators.gas, actuators.brake = LoC.update(active, CS.vEgo, CS.brakePressed, CS.standstill, CS.cruiseState.standstill,
-                                              v_cruise_kph, v_acc_sol, plan.vTargetFuture, a_acc_sol, CP);
+  LCtrlRet loc_ret = LoC.update(active, CS.vEgo, CS.brakePressed, CS.standstill, CS.cruiseState.standstill,
+                                              v_cruise_kph, v_acc_sol, chandler.vTargetFuture, a_acc_sol);
+  actuators.gas = loc_ret.final_gas;
+  actuators.brake = loc_ret.final_brake; 
   // Steering PID loop and lateral MPC
-  actuators.steer, actuators.steerAngle, lac_log = LaC.update(active, CS.vEgo, CS.steeringAngle, CS.steeringRate, CS.steeringTorqueEps, CS.steeringPressed, CS.steeringRateLimited, CP, path_plan);
+  LatPIDRet ret= LaC.update(active, CS.vEgo, CS.steeringAngle, CS.steeringRate, CS.steeringTorqueEps, 
+                            CS.steeringPressed, CS.steeringRateLimited, chandler);
+  
+  actuators.steer = ret.output_steer;
+  actuators.steerAngle = ret.angle_steers_des;
 
-  // Send a "steering required alert" if saturation count has reached the limit
-  if(lac_log.saturated && !CS.steeringPressed){
-    // Check if we deviated from the path
-    bool left_deviation = actuators.steer > 0 && path_plan.dPoly[3] > 0.1;
-    bool right_deviation = actuators.steer < 0 && path_plan.dPoly[3] < -0.1;
-
-    if(left_deviation && right_deviation){
-      AM.add(frame, "steerSaturated", enabled);
-    }
-  }
-  // Parse permanent warnings to display constantly
-  for e in get_events(events, [ET.PERMANENT]){
-    extra_text_1, extra_text_2 = "", "";
-    if(e == "calibrationIncomplete"){
-      extra_text_1 = str(cal_perc) + "%";
-      if(is_metric){
-        extra_text_2 = str(int(round(Filter.MIN_SPEED * MS_TO_KPH))) + " kph";
-      }
-      else{
-        extra_text_2 = str(int(round(Filter.MIN_SPEED * MS_TO_MPH))) + " mph";
-      }
-    }
-    AM.add(frame, str(e) + "Permanent", enabled, extra_text_1=extra_text_1, extra_text_2=extra_text_2);
-  }
-
-  return actuators, v_cruise_kph, driver_status, v_acc_sol, a_acc_sol, lac_log, last_blinker_frame;
+  return ret.pid_log;
 }
 
-void data_send(PubSocket *car_state_sock, PubSocket *car_control_sock, PubSocket *controls_state_sock, CHandler chandler, CS, CI, CP, VM, cereal::ControlsState::OpenpilotState state, actuators, v_cruise_kph, rk, AM,
-              driver_status, LaC, LoC, read_only, start_time, v_acc, a_acc, lac_log, events_prev,
-              last_blinker_frame, is_ldw_enabled, can_error_counter)
+void data_send(PubSocket *car_state_sock, PubSocket *car_control_sock, PubSocket *controls_state_sock, 
+               CHandler chandler, CARSTATE CS, CARCONTROL &CC ,CarInterface CI, CarParams CP, VehicleModel VM, 
+               cereal::ControlsState::OpenpilotState state, ACTUATORS actuators, float v_cruise_kph, 
+               RateKeeper rk, LatControlPID LaC, LongControl LoC, bool read_only, double start_time, 
+               float v_acc, float a_acc, LATPIDState lac_log, int last_blinker_frame, bool is_ldw_enabled, int can_error_counter)
 {
   //"""Send actuators and hud commands to the car, send controlsstate and MPC logging"""
   // carControl
@@ -424,7 +345,7 @@ void data_send(PubSocket *car_state_sock, PubSocket *car_control_sock, PubSocket
   auto cc_send = cc_event.initCarControl();
 
   cc_send.setEnabled(isEnabled(state));
-  cc_send.setValid(CS.canValid);
+  
   cereal::CarControl::Actuators::Builder acts = cc_send.initActuators();
   acts.setGas(actuators.gas);
   acts.setBrake(actuators.brake);
@@ -437,7 +358,7 @@ void data_send(PubSocket *car_state_sock, PubSocket *car_control_sock, PubSocket
 
   // Some override values for Honda
   float brake_discount = (1.0 - clip(actuators.brake * 3., 0.0, 1.0));  // brake discount removes a sharp nonlinearity
-  float speedOverride = CP.enableCruise ? max(0.0, (LoC.v_pid + CS.cruiseState.speedOffset) * brake_discount) : 0.0;
+  float speedOverride = CP.enableCruise ? ((0.0 < ((LoC.v_pid + CS.cruiseState.speedOffset) * brake_discount)) ? ((LoC.v_pid + CS.cruiseState.speedOffset) * brake_discount) : 0.0) : 0.0;
   cruisectl.setSpeedOverride(speedOverride);
   float accelOverride = CI.calc_accel_override(CS.aEgo, chandler.aTarget, CS.vEgo, chandler.vTarget);
   cruisectl.setAccelOverride(accelOverride);
@@ -450,7 +371,7 @@ void data_send(PubSocket *car_state_sock, PubSocket *car_control_sock, PubSocket
   hud.setRightLaneVisible(chandler.rProb > 0.5);
   hud.setLeftLaneVisible(chandler.lProb > 0.5);
 
-  bool recent_blinker = (sm.frame - last_blinker_frame) * DT_CTRL < 5.0;  // 5s blinker cooldown
+  bool recent_blinker = (chandler.frame - last_blinker_frame) * DT_CTRL < 5.0;  // 5s blinker cooldown
   bool ldw_allowed = CS.vEgo > 31 * MPH_TO_MS && !recent_blinker && is_ldw_enabled && !isActive(state);
   
   float l_lane_change_prob = 0.0;
@@ -459,6 +380,8 @@ void data_send(PubSocket *car_state_sock, PubSocket *car_control_sock, PubSocket
   bool r_lane_close = false;
   bool leftLaneDepart = false;
   bool rightLaneDepart = false;
+  bool left_lane_visible = chandler.lProb > 0.5;
+  bool right_lane_visible = chandler.rProb > 0.5;
   if(chandler.has_meta_desirePrediction){
     l_lane_change_prob = chandler.meta_desirePrediction[2];
     r_lane_change_prob = chandler.meta_desirePrediction[3];
@@ -474,19 +397,41 @@ void data_send(PubSocket *car_state_sock, PubSocket *car_control_sock, PubSocket
     }
   }
   
-  std::vector<int> type;
   if(rightLaneDepart || leftLaneDepart){
     // AM.add(sm.frame, 'ldwPermanent', False);
-    type.push_back(PERMANENT);
-    events.insert(std::map<std::string, std::vector<int>>::value_type("ldw", type));
-    type.clear();
+    CS.events.push_back({ldw, 0, 0, 0, 0, 0, 0, 0, 1});
   }
 
-  auto words = capnp::messageToFlatArray(cc_msg);
-  auto bytes = words.asBytes();
-  car_control_sock->send((char*)bytes.begin(), bytes.size());
-  // AM.process_alerts(sm.frame);
-  // CC.hudControl.visualAlert = AM.visual_alert;
+  CC.enabled = isEnabled(state);
+  CC.actuators = actuators;
+  CC.cruiseControl.override = true;
+  CC.cruiseControl.cancel = !CP.enableCruise || (!isEnabled(state) && CS.cruiseState.enabled);
+  CC.cruiseControl.speedOverride = speedOverride;
+  CC.cruiseControl.accelOverride = accelOverride;
+  CC.hudControl.setSpeed = v_cruise_kph * KPH_TO_MS;
+  CC.hudControl.speedVisible = isEnabled(state);
+  CC.hudControl.lanesVisible = isEnabled(state);
+  CC.hudControl.leadVisible = chandler.hasLead;
+  CC.hudControl.rightLaneVisible = chandler.rProb > 0.5;
+  CC.hudControl.leftLaneVisible = chandler.lProb > 0.5;
+
+
+  // CC.actuators.brake = ;
+  // CC.actuators.steer = ;
+  // CC.steeringAngle = ;
+
+
+  auto cc_words = capnp::messageToFlatArray(cc_msg);
+  auto cc_bytes = cc_words.asBytes();
+  car_control_sock->send((char*)cc_bytes.begin(), cc_bytes.size());
+
+  // CARCONTROL CC;
+  // CC.enabled = isEnabled(state);
+  // CC.actuators = actuators;
+
+  // CC.cruiseControl.override = true;
+  // CC.cruiseControl.cancel = !CP.enableCruise || (!isEnabled(state) && CS.cruiseState.enabled);
+  
 
   // controlsState
   bool force_decel = false;
@@ -494,9 +439,9 @@ void data_send(PubSocket *car_state_sock, PubSocket *car_control_sock, PubSocket
   capnp::MallocMessageBuilder ctls_msg;
   cereal::Event::Builder ctls_event = ctls_msg.initRoot<cereal::Event>();
   ctls_event.setLogMonoTime(nanos_since_boot());
+  ctls_event.setValid(CS.canValid);
   auto ctls_send = ctls_event.initControlsState();
 
-  ctls_send.setValid(CS.canValid);
   ctls_send.setPlanMonoTime(chandler.planMonoTime);
   ctls_send.setPathPlanMonoTime(chandler.pathPlanMonoTime);
   ctls_send.setEnabled(isEnabled(state));
@@ -507,7 +452,7 @@ void data_send(PubSocket *car_state_sock, PubSocket *car_control_sock, PubSocket
   ctls_send.setCurvature(VM.calc_curvature((CS.steeringAngle - chandler.angleOffset) * DEG_TO_RAD, CS.vEgo));
   ctls_send.setSteerOverride(CS.steeringPressed);
   ctls_send.setState(state);
-  ctls_send.setEngageable(!get_events(events, [ET.NO_ENTRY]));
+  ctls_send.setEngageable(!get_events(CS.events, NO_ENTRY));
   ctls_send.setLongControlState(LoC.long_control_state);
   ctls_send.setVPid(LoC.v_pid);
   ctls_send.setVCruise(v_cruise_kph);
@@ -525,7 +470,7 @@ void data_send(PubSocket *car_state_sock, PubSocket *car_control_sock, PubSocket
   ctls_send.setMapValid(chandler.mapValid);
   ctls_send.setForceDecel(force_decel);
   ctls_send.setCanErrorCounter(can_error_counter);
-  ctls_send.setCumLagMs(-rk.remaining * 1000.);
+  ctls_send.setCumLagMs(-rk.getremaining() * 1000.);
 
   cereal::ControlsState::LateralControlState::Builder lat_ctls = ctls_send.initLateralControlState();
   cereal::ControlsState::LateralPIDState::Builder pid_state = lat_ctls.initPidState();
@@ -539,40 +484,120 @@ void data_send(PubSocket *car_state_sock, PubSocket *car_control_sock, PubSocket
   pid_state.setOutput(lac_log.output);
   pid_state.setSaturated(lac_log.saturated);
     
-  auto words = capnp::messageToFlatArray(ctls_msg);
-  auto bytes = words.asBytes();
-  controls_state_sock->send((char*)bytes.begin(), bytes.size());
+  auto ctls_words = capnp::messageToFlatArray(ctls_msg);
+  auto ctls_bytes = ctls_words.asBytes();
+  controls_state_sock->send((char*)ctls_bytes.begin(), ctls_bytes.size());
 
   // carState
   capnp::MallocMessageBuilder cs_msg;
   cereal::Event::Builder cs_event = cs_msg.initRoot<cereal::Event>();
   cs_event.setLogMonoTime(nanos_since_boot());
+  cs_event.setValid(CS.canValid);
   auto cs_send = cs_event.initCarState();
 
-  cs_send.setValid(CS.canValid);
+  cereal::CarState::WheelSpeeds::Builder wheelspeeds = cs_send.initWheelSpeeds();
+  wheelspeeds.setFl(CS.wheelSpeeds.fl);
+  wheelspeeds.setFr(CS.wheelSpeeds.fr);
+  wheelspeeds.setRl(CS.wheelSpeeds.rl);
+  wheelspeeds.setRr(CS.wheelSpeeds.rr);
 
-  auto words = capnp::messageToFlatArray(cs_msg);
-  auto bytes = words.asBytes();
-  car_state_sock->send((char*)bytes.begin(), bytes.size());
+  cereal::CarState::CruiseState::Builder cruise_state = cs_send.initCruiseState();
+  cruise_state.setEnabled(CS.cruiseState.enabled);
+  cruise_state.setSpeed(CS.cruiseState.speed);
+  cruise_state.setAvailable(CS.cruiseState.available);
+  cruise_state.setSpeedOffset(CS.cruiseState.speedOffset);
+  cruise_state.setStandstill(CS.cruiseState.standstill);
+  
+  capnp::List<::cereal::CarState::ButtonEvent>::Builder btn_events = cs_send.initButtonEvents(CS.buttonEvents.size());
+  for (int btn_i = 0; btn_i < CS.buttonEvents.size(); ++btn_i) {
+    btn_events[btn_i].setPressed(CS.buttonEvents[btn_i].pressed);
+    btn_events[btn_i].setType((cereal::CarState::ButtonEvent::Type)CS.buttonEvents[btn_i].type);
+  }
+  
+  kj::ArrayPtr<const uint64_t> canmonotimes(&CS.canMonoTimes[0], CS.canMonoTimes.size());
+  cs_send.setCanMonoTimes(canmonotimes);
+
+  capnp::List< ::cereal::CarEvent>::Builder events = cs_send.initEvents(CS.events.size());
+  for (int evt_i = 0; evt_i < CS.events.size(); ++evt_i) {
+    events[evt_i].setName((cereal::CarEvent::EventName)CS.events[evt_i].name);
+    events[evt_i].setEnable(CS.events[evt_i].enable);
+    events[evt_i].setNoEntry(CS.events[evt_i].noEntry);
+    events[evt_i].setWarning(CS.events[evt_i].warning);
+    events[evt_i].setUserDisable(CS.events[evt_i].userDisable);
+    events[evt_i].setSoftDisable(CS.events[evt_i].softDisable);
+    events[evt_i].setImmediateDisable(CS.events[evt_i].immediateDisable);
+    events[evt_i].setPreEnable(CS.events[evt_i].preEnable);
+    events[evt_i].setPermanent(CS.events[evt_i].permanent);
+  }
+
+  cs_send.setVEgo(CS.vEgo);
+  cs_send.setAEgo(CS.aEgo);
+  cs_send.setGas(CS.gas);
+  cs_send.setGasPressed(CS.gasPressed);
+  cs_send.setBrake(CS.brake);
+  cs_send.setBrakePressed(CS.brakePressed);
+  cs_send.setSteeringAngle(CS.steeringAngle);
+  cs_send.setSteeringTorque(CS.steeringTorque);
+  cs_send.setSteeringPressed(CS.steeringPressed);
+  cs_send.setSteeringRate(CS.steeringRate);
+  cs_send.setVEgoRaw(CS.vEgoRaw);
+  cs_send.setStandstill(CS.standstill);
+  cs_send.setBrakeLights(CS.brakeLights);
+  cs_send.setLeftBlinker(CS.leftBlinker);
+  cs_send.setRightBlinker(CS.rightBlinker);
+  cs_send.setYawRate(CS.yawRate);
+  cs_send.setGenericToggle(CS.genericToggle);
+  cs_send.setDoorOpen(CS.doorOpen);
+  cs_send.setSeatbeltUnlatched(CS.seatbeltUnlatched);
+  cs_send.setCanValid(CS.canValid);
+  cs_send.setSteeringTorqueEps(CS.steeringTorqueEps);
+  cs_send.setClutchPressed(CS.clutchPressed);
+  cs_send.setSteeringRateLimited(CS.steeringRateLimited);
+  cs_send.setStockAeb(CS.stockAeb);
+  cs_send.setStockFcw(CS.stockFcw);
+  cs_send.setGearShifter((cereal::CarState::GearShifter)CS.gearShifter);
+
+  auto cs_words = capnp::messageToFlatArray(cs_msg);
+  auto cs_bytes = cs_words.asBytes();
+  car_state_sock->send((char*)cs_bytes.begin(), cs_bytes.size());
   // TODO
   // cs_send.carState = CS;
   // cs_send.carState.events = events;
-  return CC;
+  // return CC;
 }
 
 int main(int argc, char const *argv[])
 {
+  cout << "---------main--------" << endl;
     CARCONTROL CC;
     CARSTATE CS;
+    ACTUATORS actuators;
     bool has_relay = false;
-    
+
+    int frame = -1;
+        cout << "---------before 1--------" << endl;
+
     LongControl LoC;
+        cout << "---------before 1.2--------" << endl;
+
     LatControlPID LaC;
+        cout << "---------before 1.4--------" << endl;
+
     CarParams CP;
     VehicleModel VM;
-    CarInterface CI(false);
+        cout << "---------before 1.6--------" << endl;
+
+    
+        cout << "---------before 1.8--------" << endl;
+
     CHandler chandler;
+        cout << "---------before 1.9--------" << endl;
+
     RateKeeper rk(100);
+    cout << "---------before 2--------" << endl;
+
+    LATPIDState lac_log;
+    cout << "---------before 3--------" << endl;
 
     cereal::ControlsState::OpenpilotState state = cereal::ControlsState::OpenpilotState::DISABLED;
     int soft_disable_timer = 0;
@@ -582,6 +607,7 @@ int main(int argc, char const *argv[])
     int can_error_counter = 0;
     int last_blinker_frame = 0;
     int cal_perc = 0;
+    cout << "---------before 4--------" << endl;
 
     bool internet_needed = false;
     
@@ -589,9 +615,17 @@ int main(int argc, char const *argv[])
     chandler.sensorValid = true;
     chandler.posenetValid = true;
     chandler.freeSpace = 1.0;
+    cout << "---------before 5--------" << endl;
+
+    float v_acc = 0.; 
+    float a_acc = 0.;
 
     bool read_only = true;
     bool community_feature_disallowed = false;
+
+    float v_acc_sol = 0.0;
+    float a_acc_sol = 0.0;
+    cout << "---------before 6--------" << endl;
 
     Context * c = Context::create();
     SubSocket *thermal_sock = SubSocket::create(c, "thermal");
@@ -604,13 +638,13 @@ int main(int argc, char const *argv[])
     SubSocket *gps_location_sock = SubSocket::create(c, "gpsLocation");
     SubSocket *can_sock = SubSocket::create(c, "can");
 
+    cout << "---------before 7--------" << endl;
 
     // PubSocket *sendcan_sock = PubSocket::create(c, "sendcan");
     PubSocket *controls_state_sock = PubSocket::create(c, "controlsState");
-    PubSocket *car_state_sock = SubSocket::create(c, "carState");
+    PubSocket *car_state_sock = PubSocket::create(c, "carState");
     PubSocket *car_control_sock = PubSocket::create(c, "carControl");
     // PubSocket *car_events_sock = PubSocket::create(c, "carEvents");
-    
     assert(thermal_sock != NULL);
     assert(health_sock != NULL);
     assert(live_calibration_sock != NULL);
@@ -626,12 +660,14 @@ int main(int argc, char const *argv[])
     assert(car_state_sock != NULL);
     assert(car_control_sock != NULL);
     // assert(car_events_sock != NULL);
+    cout << "---------before 8--------" << endl;
 
+    CarInterface CI(false);
     Poller * poller = Poller::create({thermal_sock, health_sock, live_calibration_sock, 
                                       driver_monitoring_sock, plan_sock, path_plan_sock, 
                                       model_sock, gps_location_sock});
-
     while (true){
+        frame += 1;
         for (auto s : poller->poll(100)){
             Message * msg = s->receive();
             auto amsg = kj::heapArray<capnp::word>((msg->getSize() / sizeof(capnp::word)) + 1);
@@ -639,59 +675,84 @@ int main(int argc, char const *argv[])
             capnp::FlatArrayMessageReader capnp_msg(amsg);
             cereal::Event::Reader event = capnp_msg.getRoot<cereal::Event>();
 
-            handler.handle_log(event);
-
-            double start_time = sec_since_boot();
-
-            CS = data_sample(CI, chandler, can_sock, state, mismatch_counter, can_error_counter, cal_perc);
-            
-            if(!chandler.mpcSolutionValid){
-                CS.events.push_back({plannerError, 0, 1, 0, 0, 0, 1, 0, 0});
-            }
-            if(!chandler.sensorValid){
-                CS.events.push_back({sensorDataInvalid, 0, 1, 0, 0, 0, 0, 0, 1});
-            }
-            if(!chandler.paramsValid){
-                CS.events.push_back({vehicleModelInvalid, 0, 0, 1, 0, 0, 0, 0, 0});
-            }
-            if(!chandler.posenetValid){
-                CS.events.push_back({posenetInvalid, 0, 1, 1, 0, 0, 0, 0, 0});
-            }
-            if(!chandler.radarValid){
-                CS.events.push_back({radarFault, 0, 1, 0, 0, 1, 0, 0, 0});
-            }
-            if(chandler.radarCanError){
-               CS.events.push_back({radarCanError, 0, 1, 0, 0, 1, 0, 0, 0});
-            }
-            if(!CS.canValid){
-                CS.events.push_back({canError, 0, 1, 0, 0, 0, 1, 0, 0});
-            }
-            if(!sounds_available){
-                CS.events.push_back({soundsUnavailable, 0, 1, 0, 0, 0, 0, 0, 1});
-            }
-            if(internet_needed){
-                CS.events.push_back({internetConnectivityNeeded, 0, 1, 0, 0, 0, 0, 0, 1});
-            }
-            if(community_feature_disallowed){
-                CS.events.push_back({communityFeatureDisallowed, 0, 0, 0, 0, 0, 0, 0, 1});
-            }
-            if(read_only && !passive){
-                CS.events.push_back({carUnrecognized, 0, 0, 0, 0, 0, 0, 0, 1});
-            }
-
-            // Only allow engagement with brake pressed when stopped behind another stopped car
-            if(CS.brakePressed && chandler.vTargetFuture >= 0.5 && false && CS.vEgo < 0.3){
-                CS.events.push_back({noTarget, 0, 1, 0, 0, 0, 1, 0, 0});
-            }
-
-            if(!read_only){
-                // update control state
-                state, soft_disable_timer, v_cruise_kph, v_cruise_kph_last = state_transition(sm.frame, CS, CP, state, events, soft_disable_timer, v_cruise_kph, AM)
-            }
-      
+            chandler.chandle_log(event, frame);
 
             delete msg;
         }
+        double start_time = sec_since_boot();
 
+        CS = data_sample(CI, chandler, can_sock, state, mismatch_counter, can_error_counter, cal_perc);
+            
+        if(!chandler.mpcSolutionValid){
+            CS.events.push_back({plannerError, 0, 1, 0, 0, 0, 1, 0, 0});
+        }
+        if(!chandler.sensorValid){
+            CS.events.push_back({sensorDataInvalid, 0, 1, 0, 0, 0, 0, 0, 1});
+        }
+        if(!chandler.paramsValid){
+            CS.events.push_back({vehicleModelInvalid, 0, 0, 1, 0, 0, 0, 0, 0});
+        }
+        if(!chandler.posenetValid){
+            CS.events.push_back({posenetInvalid, 0, 1, 1, 0, 0, 0, 0, 0});
+        }
+        if(!chandler.radarValid){
+            CS.events.push_back({radarFault, 0, 1, 0, 0, 1, 0, 0, 0});
+        }
+        if(chandler.radarCanError){
+           CS.events.push_back({radarCanError, 0, 1, 0, 0, 1, 0, 0, 0});
+        }
+        if(!CS.canValid){
+            CS.events.push_back({canError, 0, 1, 0, 0, 0, 1, 0, 0});
+        }
+        // if(!sounds_available){
+        //     CS.events.push_back({soundsUnavailable, 0, 1, 0, 0, 0, 0, 0, 1});
+        // }
+        if(internet_needed){
+            CS.events.push_back({internetConnectivityNeeded, 0, 1, 0, 0, 0, 0, 0, 1});
+        }
+        if(community_feature_disallowed){
+            CS.events.push_back({communityFeatureDisallowed, 0, 0, 0, 0, 0, 0, 0, 1});
+        }
+        if(read_only && !passive){
+            CS.events.push_back({carUnrecognized, 0, 0, 0, 0, 0, 0, 0, 1});
+        }
+
+        // Only allow engagement with brake pressed when stopped behind another stopped car
+        if(CS.brakePressed && chandler.vTargetFuture >= 0.5 && false && CS.vEgo < 0.3){
+            CS.events.push_back({noTarget, 0, 1, 0, 0, 0, 1, 0, 0});
+        }
+        if(!read_only){
+            // update control state
+            state = state_transition(CS, CP, state, soft_disable_timer, v_cruise_kph, v_cruise_kph_last);
+            // Compute actuators (runs PID loops and lateral MPC)
+        }
+
+        lac_log = state_control(chandler, actuators, CS, CP, state, v_cruise_kph, v_cruise_kph_last, 
+                                rk, LaC, LoC, read_only, is_metric, cal_perc, frame, last_blinker_frame, 
+                                v_acc_sol, a_acc_sol);
+      
+        data_send(car_state_sock, car_control_sock, controls_state_sock, chandler, CS, CC,
+                  CI, CP, VM, state, actuators, v_cruise_kph, rk, LaC, LoC, read_only, 
+                  start_time, v_acc, a_acc, lac_log, last_blinker_frame, is_ldw_enabled, 
+                  can_error_counter);
+        rk.monitor_time();
+    }
+
+    delete thermal_sock;
+    delete health_sock;
+    delete live_calibration_sock;
+    delete driver_monitoring_sock;
+    delete plan_sock;
+    delete path_plan_sock;
+    delete model_sock;
+    delete gps_location_sock;
+    delete can_sock;
+
+    // assert(sendcan_sock != NULL);
+    delete controls_state_sock;
+    delete car_state_sock;
+    delete car_control_sock;
+    delete poller;
+    delete c;
     return 0;
 }

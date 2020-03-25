@@ -49,24 +49,36 @@ int main(int argc, char const *argv[])
 
     while (true){
       // cout << "plannerd running!!!" << endl;
-    for (auto s : poller->poll(100)){
-      Message * msg = s->receive();
-      auto amsg = kj::heapArray<capnp::word>((msg->getSize() / sizeof(capnp::word)) + 1);
-      memcpy(amsg.begin(), msg->getData(), msg->getSize());
-      capnp::FlatArrayMessageReader capnp_msg(amsg);
-      cereal::Event::Reader event = capnp_msg.getRoot<cereal::Event>();
+      for (auto s : poller->poll(100)){
+        Message * msg = s->receive();
+        auto amsg = kj::heapArray<capnp::word>((msg->getSize() / sizeof(capnp::word)) + 1);
+        memcpy(amsg.begin(), msg->getData(), msg->getSize());
+        capnp::FlatArrayMessageReader capnp_msg(amsg);
+        cereal::Event::Reader event = capnp_msg.getRoot<cereal::Event>();
 
-      handler.handle_log(event);
+        handler.handle_log(event);
 
-      auto which = event.which();
-      if (which == cereal::Event::MODEL){
+        auto which = event.which();
+        if (which == cereal::Event::MODEL){
           PP.update(handler, pathplan_sock, livempc_sock, VM);
-      } else if (which == cereal::Event::RADAR_STATE){
+        } else if (which == cereal::Event::RADAR_STATE){
           PL.update(handler, plan_sock, livelongitudinalmpc_sock);
+        }
+        delete msg;
       }
-      delete msg;
     }
-  }
+    
+    delete car_state_sock;
+    delete controls_state_sock;
+    delete radar_state_sock;
+    delete model_sock;
+    delete live_parameters_sock;
+    delete plan_sock;
+    delete livelongitudinalmpc_sock;
+    delete pathplan_sock;
+    delete livempc_sock;
+    delete poller;
+    delete c;
 
     return 0;
 }

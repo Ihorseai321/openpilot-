@@ -32,8 +32,8 @@ public:
     float wheelbase = 2.85;
     float steerRatio = 14.8;
     float mass = 3045.0 * LB_TO_KG + STD_CARGO_KG;
-    float lateralTuning_pid_kiBP = 0.0, lateralTuning_pid_kpBP = 0.0;
-    float lateralTuning_pid_kpV = 0.01, lateralTuning_pid_kiV = 0.005;     // TODO: tune this
+    float lateralTuning_pid_kiBP[1] = {0.0}, lateralTuning_pid_kpBP[1] = {0.0};
+    float lateralTuning_pid_kpV[1] = {0.01}, lateralTuning_pid_kiV[1] = {0.005};     // TODO: tune this
     float lateralTuning_pid_kf = 1.0 / MAX_ANGLE;       // MAX Steer angle to normalize FF
     float steerActuatorDelay = 0.1;      // Default delay, not measured yet
     float steerLimitTimer = 0.8;

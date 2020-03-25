@@ -1,4 +1,5 @@
-#pragma once
+#ifndef COMMON_DBC_H_
+#define COMMON_DBC_H_
 
 #include <cstddef>
 #include <cstdint>
@@ -72,7 +73,7 @@ struct DBC {
   size_t num_vals;
 };
 
-const DBC* dbc_lookup(const std::string& dbc_name);
+DBC* dbc_lookup(const std::string& dbc_name);
 
 void dbc_register(const DBC* dbc);
 
@@ -80,3 +81,4 @@ void dbc_register(const DBC* dbc);
 static void __attribute__((constructor)) do_dbc_init_ ## dbc(void) { \
   dbc_register(&dbc); \
 }
+#endif // COMMON_DBC_H_

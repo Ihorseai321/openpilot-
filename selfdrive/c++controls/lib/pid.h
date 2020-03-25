@@ -5,18 +5,18 @@
 class PIController
 {
 public:
-    PIController(float kpBP[3], float kpV[3], float kiBP[2], float kiV[2], int rate=100, float sat_limit=0.8, bool convert=false, float k_f=1., float pos_limit=0., float neg_limit=0.);
+    PIController(int rate=100, float sat_limit=0.8, bool convert=false, float k_f=1., float pos_limit=0., float neg_limit=0.);
     virtual ~PIController();
-    float get_k_p();
-    float get_k_i();
+    // float get_k_p();
+    // float get_k_i();
     void reset();
     bool _check_saturation(float control, bool check_saturation, float error);
-    float update(float setpoint, float measurement, float speed=0.0, float deadzone=0., float feedforward=0., bool freeze_integrator=false, bool check_saturation=true, bool override=false);
+    float update(float *kpBP, float *kpV, float *kiBP, float *kiV, float setpoint, float measurement, float speed=0.0, float deadzone=0., float feedforward=0., bool freeze_integrator=false, bool check_saturation=true, bool override=false);
 
-    float kpBP[3]; // proportional gain
-    float kpV[3];
-    float kiBP[2]; // integral gain
-    float kiV[2];
+    // float kpBP[3]; // proportional gain
+    // float kpV[3];
+    // float kiBP[2]; // integral gain
+    // float kiV[2];
     float k_f;  // feedforward gain
 
     float pos_limit;

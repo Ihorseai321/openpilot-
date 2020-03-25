@@ -5,10 +5,16 @@ CarState::CarState()
   left_blinker_on = 0;
   right_blinker_on = 0; 
   dt = 0.01;
-  x0 = {{0.0}, {0.0}};
-  A = {{1.0, dt}, {0.0, 1.0}};
-  C = {1.0, 0.0};
-  K = {{0.12287673}, {0.29666309}};
+  x0[0][0] = 0.0;
+  x0[1][0] = 0.0;
+  A[0][0] = 1.0;
+  A[0][1] = dt;
+  A[1][0] = 0.0;
+  A[1][1] = 1.0;
+  C[0] = 1.0;
+  C[1] = 0.0;
+  K[0][0] = 0.12287673;
+  K[1][0] = 0.29666309;
   v_ego_kf = new KF1D(x0, A, C, K);
 
   v_ego = 0.0;
@@ -26,14 +32,15 @@ void CarState::update(Parser cp)
   prev_right_blinker_on = right_blinker_on;
 
   // calc best v_ego estimate, by averaging two opposite corners
-  double v_wheel_fl = cp.vl["WheelSpeed_CG1"]['WhlRr_W_Meas'] * WHEEL_RADIUS;
-  double v_wheel_fr = cp.vl["WheelSpeed_CG1"]['WhlRl_W_Meas'] * WHEEL_RADIUS;
-  double v_wheel_rl = cp.vl["WheelSpeed_CG1"]['WhlFr_W_Meas'] * WHEEL_RADIUS;
-  double v_wheel_rr = cp.vl["WheelSpeed_CG1"]['WhlFl_W_Meas'] * WHEEL_RADIUS;
-  double v_wheel = mean([v_wheel_fl, v_wheel_fr, v_wheel_rl, v_wheel_rr]);
+  std::pair<std::string, std::string> wheel_speed_pair("WheelSpeed_CG1", "WhlRr_W_Meas");
+  v_wheel_fl = cp.vl[wheel_speed_pair] * WHEEL_RADIUS;
+  v_wheel_fr = cp.vl[wheel_speed_pair] * WHEEL_RADIUS;
+  v_wheel_rl = cp.vl[wheel_speed_pair] * WHEEL_RADIUS;
+  v_wheel_rr = cp.vl[wheel_speed_pair] * WHEEL_RADIUS;
+  v_wheel = (v_wheel_fl + v_wheel_fr + v_wheel_rl + v_wheel_rr) / 4;
 
   // Kalman filter
-  if(abs(v_wheel - v_ego) > 2.0){  // Prevent large accelerations when car starts at non zero speed
+  if(std::abs(v_wheel - v_ego) > 2.0){  // Prevent large accelerations when car starts at non zero speed
     double tmp[2][1];
     tmp[0][0] = v_wheel;
     tmp[1][0] = 0.0;
@@ -42,21 +49,42 @@ void CarState::update(Parser cp)
 
   double v_ego_raw = v_wheel;
   double v_ego_x[2][1] = {{0}, {0}};
-  v_ego_kf.update(v_wheel, v_ego_x);
+  v_ego_kf->update(v_wheel, v_ego_x);
   v_ego = v_ego_x[0][0];
   a_ego = v_ego_x[1][0];
+
   standstill = !(v_wheel > 0.001);
 
-  angle_steers = cp.vl["Steering_Wheel_Data_CG1"]['SteWhlRelInit_An_Sns'];
-  v_cruise_pcm = cp.vl["Cruise_Status"]['Set_Speed'] * MPH_TO_MS;
-  pcm_acc_status = cp.vl["Cruise_Status"]['Cruise_State'];
-  main_on = cp.vl["Cruise_Status"]['Cruise_State'] != 0;
-  lkas_state = cp.vl["Lane_Keep_Assist_Status"]['LaActAvail_D_Actl'];
+  std::pair<std::string, std::string> angle_steer_pair("Steering_Wheel_Data_CG1", "SteWhlRelInit_An_Sns");
+  angle_steers = (float)cp.vl[angle_steer_pair];
+
+  std::pair<std::string, std::string> v_cruise_pcm_pair("Cruise_Status", "Set_Speed");
+  v_cruise_pcm = (float)cp.vl[v_cruise_pcm_pair] * MPH_TO_MS;
+
+  std::pair<std::string, std::string> pcm_acc_status_pair("Cruise_Status", "Cruise_State");
+  pcm_acc_status = (int)cp.vl[pcm_acc_status_pair];
+
+  main_on = (bool)cp.vl[pcm_acc_status_pair] != 0;
+
+  std::pair<std::string, std::string> lkas_state_pair("Lane_Keep_Assist_Status", "LaActAvail_D_Actl");
+  lkas_state = (int)cp.vl[lkas_state_pair];
   // TODO: we also need raw driver torque, needed for Assisted Lane Change
-  steer_override = !cp.vl["Lane_Keep_Assist_Status"]['LaHandsOff_B_Actl'];
-  steer_error = cp.vl["Lane_Keep_Assist_Status"]['LaActDeny_B_Actl'];
-  user_gas = cp.vl["EngineData_14"]['ApedPosScal_Pc_Actl'];
-  brake_pressed = cp.vl["Cruise_Status"]["Brake_Drv_Appl"];
-  brake_lights = cp.vl["BCM_to_HS_Body"]["Brake_Lights"];
-  generic_toggle = cp.vl["Steering_Buttons"]["Dist_Incr"];
+
+  std::pair<std::string, std::string> steer_override_pair("Lane_Keep_Assist_Status", "LaHandsOff_B_Actl");
+  steer_override = (float)!cp.vl[steer_override_pair];
+
+  std::pair<std::string, std::string> steer_error_pair("Lane_Keep_Assist_Status", "LaActDeny_B_Actl");
+  steer_error = (bool)cp.vl[steer_error_pair];
+
+  std::pair<std::string, std::string> user_gas_pair("EngineData_14", "ApedPosScal_Pc_Actl");
+  user_gas = (float)cp.vl[user_gas_pair];
+
+  std::pair<std::string, std::string> brake_pressed_pair("Cruise_Status", "Brake_Drv_Appl");
+  brake_pressed = (bool)cp.vl[brake_pressed_pair];
+
+  std::pair<std::string, std::string> brake_lights_pair("BCM_to_HS_Body", "Brake_Lights");
+  brake_lights = (bool)cp.vl[brake_lights_pair];
+
+  std::pair<std::string, std::string> generic_toggle_pair("Steering_Buttons", "Dist_Incr");
+  generic_toggle = (bool)cp.vl[generic_toggle_pair];
 }
