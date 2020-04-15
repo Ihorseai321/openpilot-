@@ -2,6 +2,7 @@
 #include <capnp/message.h>
 #include <capnp/serialize-packed.h>
 #include "cereal/gen/cpp/log.capnp.h"
+// #include "cereal/gen/cpp/car.capnp.h"
 #include "messaging.hpp"
 #include "common/timing.h"
 #include "lib/ctl_handler.h"
@@ -12,6 +13,7 @@
 #include "lib/longcontrol.h"
 #include "lib/latcontrol_pid.h"
 #include <iostream>
+#include "t_pub.h"
 using namespace std;
 // kph
 #define V_CRUISE_MAX 144
@@ -107,46 +109,122 @@ bool isEnabled(cereal::ControlsState::OpenpilotState state)
     return (isActive(state) || state == cereal::ControlsState::OpenpilotState::PRE_ENABLED);
 }
 
-std::string drain_sock_raw(SubSocket *sock)
+
+// std::vector<std::string> drain_sock_raw(SubSocket *sock, bool wait_for_one)
+// {
+//   std::vector<std::string> ret;
+  
+
+//   while(true){
+    
+//     std::string dat;
+//     if(wait_for_one && ret.size() == 0){
+//       cout << "drain_sock_raw->receive-if-before" << endl;
+//       Message *canmsg = sock->receive();
+//       cout << "drain_sock_raw->receive-if->" << canmsg->getSize() << endl;
+//       if(canmsg->getSize() != 0){
+//         dat.assign(canmsg->getData(), canmsg->getSize());
+//         cout << "drain_sock_raw->if-if" << endl;
+//       }
+//       delete canmsg;
+//       cout << "drain_sock_raw->delete-1" << endl;
+//     }
+//     else{
+//       cout << "drain_sock_raw->receive-else-before" << endl;
+//       Message *canmsg = sock->receive(true);
+//       cout << "drain_sock_raw->receive-else->" << canmsg->getSize()  << endl;
+//       if(canmsg->getSize() != 0){
+//         dat.assign(canmsg->getData(), canmsg->getSize());
+//         cout << "drain_sock_raw->else-if" << endl;
+//       }   
+//       delete canmsg;  
+//       cout << "drain_sock_raw->delete-2" << endl; 
+//     }
+
+//     if(dat.empty()){
+//       cout << "drain_sock_raw->empty" << endl;
+//       break;
+//     }
+    
+//     cout << dat << endl;
+//     cout << "--------> before push_back: " << ret.size() << endl;
+//     ret.push_back(dat);
+//     cout << "--------> after push_back: " << ret.size() << endl;
+    
+//   }
+//   cout << "drain_sock_raw->return" << endl;
+//   return ret;
+// }
+
+std::vector<std::string> drain_sock_raw(SubSocket *sock, bool wait_for_one)
 {
-  std::string ret;
-  Message *msg;
+  std::vector<std::string> ret;
+  
+
   while(true){
-    if(ret.empty()){
-        msg = sock->receive();
-        if(msg->getSize() > 0){
-            for(int i = 0; i < msg->getSize(); ++i){
-                ret += msg->getData()[i];
-            }
-        }
+    
+    std::string dat;
+    
+    if(wait_for_one && ret.size() == 0){
+      cout << "drain_sock_raw->receive-if-before" << endl;
+      Message *canmsg = sock->receive();
+      cout << "drain_sock_raw->receive-if->" << endl;
+      if(canmsg != NULL){
+        dat.assign(canmsg->getData(), canmsg->getSize());
+        cout << "drain_sock_raw->if-if" << endl;
+      }
+      delete canmsg;
+      cout << "drain_sock_raw->delete-1" << endl;
     }
     else{
+      cout << "drain_sock_raw->receive-else-before" << endl;
+      Message *canmsg = sock->receive(true);
+      cout << "drain_sock_raw->receive-else->" << endl;
+      if(canmsg != NULL){
+        dat.assign(canmsg->getData(), canmsg->getSize());
+        cout << "drain_sock_raw->else-if" << endl;
+      }   
+      delete canmsg;  
+      cout << "drain_sock_raw->delete-2" << endl; 
+    }
+
+    if(dat.empty()){
+      cout << "drain_sock_raw->empty" << endl;
       break;
     }
+    
+    cout << dat << endl;
+    cout << "--------> before push_back: " << ret.size() << endl;
+    ret.push_back(dat);
+    cout << "--------> after push_back: " << ret.size() << endl;
+    
   }
-
+  cout << "drain_sock_raw->return" << endl;
   return ret;
 }
+
 
 CARSTATE data_sample(CarInterface CI, CHandler chandler, SubSocket *can_sock, cereal::ControlsState::OpenpilotState state, int &mismatch_counter, int &can_error_counter, int &cal_perc)
 {
     // Update carstate from CAN and create events
-    std::string can_strs = drain_sock_raw(can_sock);
+    std::vector<std::string> can_strs = drain_sock_raw(can_sock, true);
+    cout << "---------before 13.0--------" << endl;
     CARSTATE CS = CI.update(can_strs);
-
+    cout << "---------before 13.1--------" << endl;
     // events = list(CS.events);
     add_lane_change_event(CS.events, chandler);
+    cout << "---------before 13.2--------" << endl;
     bool enabled = isEnabled(state);
 
     // Check for CAN timeout
-    if(can_strs.empty()){
+    if(can_strs.size() == 0){
         can_error_counter += 1;
         CS.events.push_back({canError, 0, 1, 0, 0, 0, 1, 0, 0});
     }
 
-    bool overtemp = chandler.thermalStatus >= cereal::ThermalData::ThermalStatus::RED;
+    bool overtemp = int(chandler.thermalStatus) >= int(cereal::ThermalData::ThermalStatus::RED);
     bool free_space = chandler.freeSpace < 0.07;  // under 7% of space free no enable allowed
-    bool low_battery = chandler.batteryPercent < 1 && chandler.chargingError;  // at zero percent battery, while discharging, OP should not allowed
+    bool low_battery = (chandler.batteryPercent < 1) && chandler.chargingError;  // at zero percent battery, while discharging, OP should not allowed
     bool mem_low = chandler.memUsedPercent > 90;
 
     // Create events for battery, temperature and disk space
@@ -184,7 +262,7 @@ CARSTATE data_sample(CarInterface CI, CHandler chandler, SubSocket *can_sock, ce
         }
     }
     else{
-        if(sizeof(chandler.rpyCalib)/sizeof(chandler.rpyCalib[0]) == 3){
+        if(/*sizeof(chandler.rpyCalib)/sizeof(chandler.rpyCalib[0]) == 3*/1){
             cal_rpy[0] = chandler.rpyCalib[0];
             cal_rpy[1] = chandler.rpyCalib[1];
             cal_rpy[2] = chandler.rpyCalib[2];
@@ -206,7 +284,7 @@ CARSTATE data_sample(CarInterface CI, CHandler chandler, SubSocket *can_sock, ce
     if(mismatch_counter >= 200){
         CS.events.push_back({controlsMismatch, 0, 0, 0, 0, 0, 1, 0, 0});
     }
-
+cout << "---------before 13.3--------" << endl;
     return CS;
 }
 
@@ -331,18 +409,24 @@ LATPIDState state_control(CHandler chandler, ACTUATORS &actuators, CARSTATE CS, 
   return ret.pid_log;
 }
 
-void data_send(PubSocket *car_state_sock, PubSocket *car_control_sock, PubSocket *controls_state_sock, 
+void car_state_publish(PubSocket *car_state_sock, PubSocket *car_control_sock, PubSocket *controls_state_sock, 
                CHandler chandler, CARSTATE CS, CARCONTROL &CC ,CarInterface CI, CarParams CP, VehicleModel VM, 
                cereal::ControlsState::OpenpilotState state, ACTUATORS actuators, float v_cruise_kph, 
                RateKeeper rk, LatControlPID LaC, LongControl LoC, bool read_only, double start_time, 
                float v_acc, float a_acc, LATPIDState lac_log, int last_blinker_frame, bool is_ldw_enabled, int can_error_counter)
 {
-  //"""Send actuators and hud commands to the car, send controlsstate and MPC logging"""
-  // carControl
-  capnp::MallocMessageBuilder cc_msg;
-  cereal::Event::Builder cc_event = cc_msg.initRoot<cereal::Event>();
-  cc_event.setLogMonoTime(nanos_since_boot());
-  auto cc_send = cc_event.initCarControl();
+  cout << "---------before 16.0000--------" << endl;
+  capnp::MallocMessageBuilder msg;
+    cout << "---------before 16.0001--------" << endl;
+
+  auto event = msg.initRoot<cereal::Event>();
+    cout << "---------before 16.0002--------" << endl;
+
+  event.setLogMonoTime(nanos_since_boot());
+    cout << "---------before 16.0003--------" << endl;
+
+  auto cc_send = event.initCarControl();
+            cout << "---------before 16.0--------" << endl;
 
   cc_send.setEnabled(isEnabled(state));
   
@@ -351,10 +435,12 @@ void data_send(PubSocket *car_state_sock, PubSocket *car_control_sock, PubSocket
   acts.setBrake(actuators.brake);
   acts.setSteer(actuators.steer);
   acts.setSteerAngle(actuators.steerAngle);
+            cout << "---------before 16.1--------" << endl;
 
   cereal::CarControl::CruiseControl::Builder cruisectl = cc_send.initCruiseControl();
   cruisectl.setOverride(true);
   cruisectl.setCancel(!CP.enableCruise || (!isEnabled(state) && CS.cruiseState.enabled));
+            cout << "---------before 16.2--------" << endl;
 
   // Some override values for Honda
   float brake_discount = (1.0 - clip(actuators.brake * 3., 0.0, 1.0));  // brake discount removes a sharp nonlinearity
@@ -362,7 +448,8 @@ void data_send(PubSocket *car_state_sock, PubSocket *car_control_sock, PubSocket
   cruisectl.setSpeedOverride(speedOverride);
   float accelOverride = CI.calc_accel_override(CS.aEgo, chandler.aTarget, CS.vEgo, chandler.vTarget);
   cruisectl.setAccelOverride(accelOverride);
-  
+              cout << "---------before 16.3--------" << endl;
+
   cereal::CarControl::HUDControl::Builder hud = cc_send.initHudControl();
   hud.setSetSpeed(v_cruise_kph * KPH_TO_MS);
   hud.setSpeedVisible(isEnabled(state));
@@ -370,6 +457,7 @@ void data_send(PubSocket *car_state_sock, PubSocket *car_control_sock, PubSocket
   hud.setLeadVisible(chandler.hasLead);
   hud.setRightLaneVisible(chandler.rProb > 0.5);
   hud.setLeftLaneVisible(chandler.lProb > 0.5);
+            cout << "---------before 16.4--------" << endl;
 
   bool recent_blinker = (chandler.frame - last_blinker_frame) * DT_CTRL < 5.0;  // 5s blinker cooldown
   bool ldw_allowed = CS.vEgo > 31 * MPH_TO_MS && !recent_blinker && is_ldw_enabled && !isActive(state);
@@ -396,7 +484,8 @@ void data_send(PubSocket *car_state_sock, PubSocket *car_control_sock, PubSocket
       hud.setRightLaneDepart(rightLaneDepart);
     }
   }
-  
+              cout << "---------before 16.5--------" << endl;
+
   if(rightLaneDepart || leftLaneDepart){
     // AM.add(sm.frame, 'ldwPermanent', False);
     CS.events.push_back({ldw, 0, 0, 0, 0, 0, 0, 0, 1});
@@ -421,9 +510,24 @@ void data_send(PubSocket *car_state_sock, PubSocket *car_control_sock, PubSocket
   // CC.steeringAngle = ;
 
 
-  auto cc_words = capnp::messageToFlatArray(cc_msg);
+  auto cc_words = capnp::messageToFlatArray(msg);
   auto cc_bytes = cc_words.asBytes();
   car_control_sock->send((char*)cc_bytes.begin(), cc_bytes.size());
+}
+
+void data_send(PubSocket *car_state_sock, PubSocket *car_control_sock, PubSocket *controls_state_sock, 
+               CHandler chandler, CARSTATE CS, CARCONTROL &CC ,CarInterface CI, CarParams CP, VehicleModel VM, 
+               cereal::ControlsState::OpenpilotState state, ACTUATORS actuators, float v_cruise_kph, 
+               RateKeeper rk, LatControlPID LaC, LongControl LoC, bool read_only, double start_time, 
+               float v_acc, float a_acc, LATPIDState lac_log, int last_blinker_frame, bool is_ldw_enabled, int can_error_counter)
+{
+  //"""Send actuators and hud commands to the car, send controlsstate and MPC logging"""
+  // carControl
+
+  // car_state_publish(car_state_sock, car_control_sock, controls_state_sock, chandler, CS, CC,
+  //                   CI, CP, VM, state, actuators, v_cruise_kph, rk, LaC, LoC, read_only, 
+  //                   start_time, v_acc, a_acc, lac_log, last_blinker_frame, is_ldw_enabled, 
+  //                   can_error_counter);
 
   // CARCONTROL CC;
   // CC.enabled = isEnabled(state);
@@ -436,11 +540,13 @@ void data_send(PubSocket *car_state_sock, PubSocket *car_control_sock, PubSocket
   // controlsState
   bool force_decel = false;
   
+
   capnp::MallocMessageBuilder ctls_msg;
   cereal::Event::Builder ctls_event = ctls_msg.initRoot<cereal::Event>();
   ctls_event.setLogMonoTime(nanos_since_boot());
   ctls_event.setValid(CS.canValid);
   auto ctls_send = ctls_event.initControlsState();
+        cout << "-----------------------ctls_msg------------------" << endl;
 
   ctls_send.setPlanMonoTime(chandler.planMonoTime);
   ctls_send.setPathPlanMonoTime(chandler.pathPlanMonoTime);
@@ -566,11 +672,49 @@ void data_send(PubSocket *car_state_sock, PubSocket *car_control_sock, PubSocket
   // return CC;
 }
 
+void send(PubSocket *controls_state_sock, PubSocket *car_control_sock)
+{
+                  cout << "-----------------------ctls_msg->1------------------" << endl;
+
+    capnp::MallocMessageBuilder cc_msg;
+                      cout << "-----------------------ctls_msg->2------------------" << endl;
+
+    cereal::Event::Builder cc_event = cc_msg.initRoot<cereal::Event>();
+                      cout << "-----------------------ctls_msg->3------------------" << endl;
+
+    cc_event.setLogMonoTime(nanos_since_boot());
+    auto cc_send = cc_event.initCarControl();
+
+    cc_send.setEnabled(true);
+    cereal::CarControl::Actuators::Builder actuators = cc_send.initActuators();
+    actuators.setGas(5.1);
+                
+    auto words = capnp::messageToFlatArray(cc_msg);
+    auto bytes = words.asBytes();
+    car_control_sock->send((char*)bytes.begin(), bytes.size());
+
+                capnp::MallocMessageBuilder ctls_msg;
+                cereal::Event::Builder ctls_event = ctls_msg.initRoot<cereal::Event>();
+                ctls_event.setLogMonoTime(nanos_since_boot());
+                ctls_event.setValid(true);
+                auto ctls_send = ctls_event.initControlsState();
+                cout << "-----------------------ctls_msg------------------" << endl;
+
+                cereal::ControlsState::LateralControlState::Builder lat_ctls = ctls_send.initLateralControlState();
+                cereal::ControlsState::LateralPIDState::Builder pid_state = lat_ctls.initPidState();
+                pid_state.setActive(true);
+    
+                auto ctls_words = capnp::messageToFlatArray(ctls_msg);
+                auto ctls_bytes = ctls_words.asBytes();
+
+                controls_state_sock->send((char*)ctls_bytes.begin(), ctls_bytes.size());
+}
+
 int main(int argc, char const *argv[])
 {
   cout << "---------main--------" << endl;
     CARCONTROL CC;
-    CARSTATE CS;
+    // CARSTATE CS;
     ACTUATORS actuators;
     bool has_relay = false;
 
@@ -663,80 +807,112 @@ int main(int argc, char const *argv[])
     cout << "---------before 8--------" << endl;
 
     CarInterface CI(false);
-    Poller * poller = Poller::create({thermal_sock, health_sock, live_calibration_sock, 
-                                      driver_monitoring_sock, plan_sock, path_plan_sock, 
-                                      model_sock, gps_location_sock});
+    Poller * poller = Poller::create({plan_sock, path_plan_sock});
+    // live_calibration_sock, driver_monitoring_sock, model_sock, gps_location_sock
+    cout << "---------before 9--------" << endl;
     while (true){
         frame += 1;
+        cout << "---------before 10--------" << endl;
         for (auto s : poller->poll(100)){
-            Message * msg = s->receive();
-            auto amsg = kj::heapArray<capnp::word>((msg->getSize() / sizeof(capnp::word)) + 1);
-            memcpy(amsg.begin(), msg->getData(), msg->getSize());
-            capnp::FlatArrayMessageReader capnp_msg(amsg);
-            cereal::Event::Reader event = capnp_msg.getRoot<cereal::Event>();
-
-            chandler.chandle_log(event, frame);
-
-            delete msg;
+          cout << "---------before 11--------" << endl;
+          Message * msg = s->receive();
+          auto amsg = kj::heapArray<capnp::word>((msg->getSize() / sizeof(capnp::word)) + 1);
+          memcpy(amsg.begin(), msg->getData(), msg->getSize());
+          capnp::FlatArrayMessageReader capnp_msg(amsg);
+          cereal::Event::Reader event = capnp_msg.getRoot<cereal::Event>();
+          cout << "---------before 12--------" << endl;
+          chandler.chandle_log(event, frame);
+          
+          delete msg;
+          cout << "---------after 12--------" << endl;
         }
+
+        cout << "---------before send--------" << endl;
+        // send(controls_state_sock, car_control_sock);
+        // cout << "---------after send--------" << endl;
+  //         capnp::MallocMessageBuilder cc_msg;
+
+  //         cereal::Event::Builder cc_event = cc_msg.initRoot<cereal::Event>();
+
+  //         cc_event.setLogMonoTime(nanos_since_boot());
+  //   cout << "---------before 12.0003--------" << endl;
+
+  // auto cc_send = cc_event.initCarControl();
+
+
+
+        cout << "---------before 13--------" << endl;
+            
         double start_time = sec_since_boot();
 
-        CS = data_sample(CI, chandler, can_sock, state, mismatch_counter, can_error_counter, cal_perc);
-            
-        if(!chandler.mpcSolutionValid){
-            CS.events.push_back({plannerError, 0, 1, 0, 0, 0, 1, 0, 0});
-        }
-        if(!chandler.sensorValid){
-            CS.events.push_back({sensorDataInvalid, 0, 1, 0, 0, 0, 0, 0, 1});
-        }
-        if(!chandler.paramsValid){
-            CS.events.push_back({vehicleModelInvalid, 0, 0, 1, 0, 0, 0, 0, 0});
-        }
-        if(!chandler.posenetValid){
-            CS.events.push_back({posenetInvalid, 0, 1, 1, 0, 0, 0, 0, 0});
-        }
-        if(!chandler.radarValid){
-            CS.events.push_back({radarFault, 0, 1, 0, 0, 1, 0, 0, 0});
-        }
-        if(chandler.radarCanError){
-           CS.events.push_back({radarCanError, 0, 1, 0, 0, 1, 0, 0, 0});
-        }
-        if(!CS.canValid){
-            CS.events.push_back({canError, 0, 1, 0, 0, 0, 1, 0, 0});
-        }
-        // if(!sounds_available){
-        //     CS.events.push_back({soundsUnavailable, 0, 1, 0, 0, 0, 0, 0, 1});
-        // }
-        if(internet_needed){
-            CS.events.push_back({internetConnectivityNeeded, 0, 1, 0, 0, 0, 0, 0, 1});
-        }
-        if(community_feature_disallowed){
-            CS.events.push_back({communityFeatureDisallowed, 0, 0, 0, 0, 0, 0, 0, 1});
-        }
-        if(read_only && !passive){
-            CS.events.push_back({carUnrecognized, 0, 0, 0, 0, 0, 0, 0, 1});
-        }
+        CARSTATE CS = data_sample(CI, chandler, can_sock, state, mismatch_counter, can_error_counter, cal_perc);
 
-        // Only allow engagement with brake pressed when stopped behind another stopped car
-        if(CS.brakePressed && chandler.vTargetFuture >= 0.5 && false && CS.vEgo < 0.3){
+
+                    cout << "---------before 14--------" << endl;
+          if(!chandler.mpcSolutionValid){
+              CS.events.push_back({plannerError, 0, 1, 0, 0, 0, 1, 0, 0});
+          }
+          if(!chandler.sensorValid){
+            CS.events.push_back({sensorDataInvalid, 0, 1, 0, 0, 0, 0, 0, 1});
+          }
+          if(!chandler.paramsValid){
+            CS.events.push_back({vehicleModelInvalid, 0, 0, 1, 0, 0, 0, 0, 0});
+          }
+          if(!chandler.posenetValid){
+            CS.events.push_back({posenetInvalid, 0, 1, 1, 0, 0, 0, 0, 0});
+          }
+          if(!chandler.radarValid){
+            CS.events.push_back({radarFault, 0, 1, 0, 0, 1, 0, 0, 0});
+          }
+          if(chandler.radarCanError){
+           CS.events.push_back({radarCanError, 0, 1, 0, 0, 1, 0, 0, 0});
+          }
+          if(!CS.canValid){
+            CS.events.push_back({canError, 0, 1, 0, 0, 0, 1, 0, 0});
+          }
+          // if(!sounds_available){
+          //     CS.events.push_back({soundsUnavailable, 0, 1, 0, 0, 0, 0, 0, 1});
+          // }
+          if(internet_needed){
+            CS.events.push_back({internetConnectivityNeeded, 0, 1, 0, 0, 0, 0, 0, 1});
+          }
+          if(community_feature_disallowed){
+            CS.events.push_back({communityFeatureDisallowed, 0, 0, 0, 0, 0, 0, 0, 1});
+          }
+          if(read_only && !passive){
+            CS.events.push_back({carUnrecognized, 0, 0, 0, 0, 0, 0, 0, 1});
+          }
+
+          // Only allow engagement with brake pressed when stopped behind another stopped car
+          if(CS.brakePressed && chandler.vTargetFuture >= 0.5 && false && CS.vEgo < 0.3){
             CS.events.push_back({noTarget, 0, 1, 0, 0, 0, 1, 0, 0});
-        }
-        if(!read_only){
+          }
+          if(!read_only){
             // update control state
             state = state_transition(CS, CP, state, soft_disable_timer, v_cruise_kph, v_cruise_kph_last);
             // Compute actuators (runs PID loops and lateral MPC)
-        }
+          }
+            cout << "---------before 15--------" << endl;
 
-        lac_log = state_control(chandler, actuators, CS, CP, state, v_cruise_kph, v_cruise_kph_last, 
-                                rk, LaC, LoC, read_only, is_metric, cal_perc, frame, last_blinker_frame, 
-                                v_acc_sol, a_acc_sol);
-      
-        data_send(car_state_sock, car_control_sock, controls_state_sock, chandler, CS, CC,
-                  CI, CP, VM, state, actuators, v_cruise_kph, rk, LaC, LoC, read_only, 
-                  start_time, v_acc, a_acc, lac_log, last_blinker_frame, is_ldw_enabled, 
-                  can_error_counter);
-        rk.monitor_time();
+          lac_log = state_control(chandler, actuators, CS, CP, state, v_cruise_kph, v_cruise_kph_last, 
+                                  rk, LaC, LoC, read_only, is_metric, cal_perc, frame, last_blinker_frame, 
+                                  v_acc_sol, a_acc_sol);
+            cout << "---------before 16--------" << endl;
+          //   car_state_publish2(car_state_sock, car_control_sock, controls_state_sock, chandler, CS, CC,
+          //           CI, CP, VM, state, actuators, v_cruise_kph, rk, LaC, LoC, read_only, 
+          //           start_time, v_acc, a_acc, lac_log, last_blinker_frame, is_ldw_enabled, 
+          //           can_error_counter);
+          // data_send(car_state_sock, car_control_sock, controls_state_sock, chandler, CS, CC,
+          //           CI, CP, VM, state, actuators, v_cruise_kph, rk, LaC, LoC, read_only, 
+          //           start_time, v_acc, a_acc, lac_log, last_blinker_frame, is_ldw_enabled, 
+          //           can_error_counter);
+                    cout << "---------before 17--------" << endl;
+
+          rk.monitor_time();
+                    cout << "---------before 18--------" << endl;
+        
     }
+            cout << "---------before 19--------" << endl;
 
     delete thermal_sock;
     delete health_sock;

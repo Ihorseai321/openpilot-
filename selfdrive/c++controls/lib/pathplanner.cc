@@ -268,8 +268,7 @@ void PathPlanner::update(Handler handler, PubSocket *pathplan_sock, PubSocket *l
     auto bytes = words.asBytes();
     pathplan_sock->send((char*)bytes.begin(), bytes.size());
     cout << "pathplan PubSocket" << endl;
-
-
+ 
     bool LOG_MPC = std::getenv("LOG_MPC") ? true : false;
 
     if(LOG_MPC){

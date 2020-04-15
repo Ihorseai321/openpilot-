@@ -73,7 +73,7 @@ struct DBC {
   size_t num_vals;
 };
 
-DBC* dbc_lookup(const std::string& dbc_name);
+const DBC* dbc_lookup(const std::string& dbc_name);
 
 void dbc_register(const DBC* dbc);
 

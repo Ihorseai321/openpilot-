@@ -250,6 +250,7 @@ class CarInterface(CarInterfaceBase):
     ret.enableDsu = is_ecu_disconnected(fingerprint[0], FINGERPRINTS, ECU_FINGERPRINT, candidate, ECU.DSU) and candidate not in TSS2_CAR
     ret.enableApgs = False  # is_ecu_disconnected(fingerprint[0], FINGERPRINTS, ECU_FINGERPRINT, candidate, ECU.APGS)
     ret.enableGasInterceptor = 0x201 in fingerprint[0]
+    # print("---------------->enableGasInterceptor%s"%ret.enableGasInterceptor)
     ret.openpilotLongitudinalControl = ret.enableCamera and (ret.enableDsu or candidate in TSS2_CAR)
     cloudlog.warning("ECU Camera Simulated: %r", ret.enableCamera)
     cloudlog.warning("ECU DSU Simulated: %r", ret.enableDsu)

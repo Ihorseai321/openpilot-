@@ -9,7 +9,7 @@ class CarState
 public:
   CarState();
   ~CarState();
-  void update(Parser cp);
+  void update(Parser &cp);
 
   int left_blinker_on;
   int right_blinker_on;

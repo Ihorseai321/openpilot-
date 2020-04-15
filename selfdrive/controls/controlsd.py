@@ -17,16 +17,21 @@ from selfdrive.controls.lib.drive_helpers import get_events, \
                                                  EventTypes as ET, \
                                                  update_v_cruise, \
                                                  initialize_v_cruise
-from selfdrive.controls.lib.longcontrol import LongControl, STARTING_TARGET_SPEED
-from selfdrive.controls.lib.latcontrol_pid import LatControlPID
-from selfdrive.controls.lib.latcontrol_indi import LatControlINDI
-from selfdrive.controls.lib.latcontrol_lqr import LatControlLQR
+# from selfdrive.controls.lib.longcontrol import LongControl, STARTING_TARGET_SPEED
+from selfdrive.controls.lib import liblonctl_py
+# from selfdrive.controls.lib.latcontrol_pid import LatControlPID
+# from selfdrive.controls.lib.latcontrol_indi import LatControlINDI
+# from selfdrive.controls.lib.latcontrol_lqr import LatControlLQR
+from selfdrive.controls.lib import liblatctl_py
+
 from selfdrive.controls.lib.alertmanager import AlertManager
 from selfdrive.controls.lib.vehicle_model import VehicleModel
 from selfdrive.controls.lib.driver_monitor import DriverStatus, MAX_TERMINAL_ALERTS, MAX_TERMINAL_DURATION
 from selfdrive.controls.lib.planner import LON_MPC_STEP
 from selfdrive.controls.lib.gps_helpers import is_rhd_region
 from selfdrive.locationd.calibration_helpers import Calibration, Filter
+# from ctypes import *
+import ctypes
 
 LANE_DEPARTURE_THRESHOLD = 0.1
 
@@ -36,6 +41,13 @@ HwType = log.HealthData.HwType
 
 LaneChangeState = log.PathPlan.LaneChangeState
 LaneChangeDirection = log.PathPlan.LaneChangeDirection
+
+class LateralLQRState(ctypes.Structure):      
+  _fields_ = [("active", ctypes.c_bool),("steerAngle", ctypes.c_float),("i", ctypes.c_float),("output", ctypes.c_float),("lqrOutput", ctypes.c_float),("saturated", ctypes.c_bool),]
+  
+
+class LatLQRRet(ctypes.Structure):      
+  _fields_ = [("output_steer", ctypes.c_float),("angle_steers_des", ctypes.c_float),("lqr_log", LateralLQRState)] 
 
 def get_CI(CP):
   from selfdrive.car.car_helpers import interfaces
@@ -274,7 +286,7 @@ def state_control(frame, rcv_frame, plan, path_plan, CS, CP, state, events, v_cr
 
   if state in [State.preEnabled, State.disabled]:
     LaC.reset()
-    LoC.reset(v_pid=CS.vEgo)
+    LoC.reset(CS.vEgo)
 
   elif state in [State.enabled, State.softDisabling]:
     # parse warnings from car specific interface
@@ -294,11 +306,28 @@ def state_control(frame, rcv_frame, plan, path_plan, CS, CP, state, events, v_cr
   v_acc_sol = plan.vStart + dt * (a_acc_sol + plan.aStart) / 2.0
 
   # Gas/Brake PID loop
-  actuators.gas, actuators.brake = LoC.update(active, CS.vEgo, CS.brakePressed, CS.standstill, CS.cruiseState.standstill,
-                                              v_cruise_kph, v_acc_sol, plan.vTargetFuture, a_acc_sol, CP)
-  # Steering PID loop and lateral MPC
-  actuators.steer, actuators.steerAngle, lac_log = LaC.update(active, CS.vEgo, CS.steeringAngle, CS.steeringRate, CS.steeringTorqueEps, CS.steeringPressed, CS.steeringRateLimited, CP, path_plan)
+  # actuators.gas, actuators.brake = LoC.update(active, CS.vEgo, CS.brakePressed, CS.standstill, CS.cruiseState.standstill,
+  #                                             v_cruise_kph, v_acc_sol, plan.vTargetFuture, a_acc_sol, CP)
+  LoC.update(active, CS.vEgo, CS.brakePressed, CS.standstill, CS.cruiseState.standstill,
+             v_cruise_kph, v_acc_sol, plan.vTargetFuture, a_acc_sol)
 
+  actuators.gas = LoC.getFinalGas()
+  actuators.brake = LoC.getFinalBrake()
+  # Steering PID loop and lateral MPC
+  # actuators.steer, actuators.steerAngle, lac_log = LaC.update(active, CS.vEgo, CS.steeringAngle, CS.steeringRate, CS.steeringTorqueEps, CS.steeringPressed, CS.steeringRateLimited, CP, path_plan)
+  # lqrret = liblatctl_py.ffi.new("LatLQRRet *")
+  # lac_log = liblatctl_py.ffi.new("LateralLQRState *")
+  LaC.update(active, CS.vEgo, CS.steeringAngle, CS.steeringRate, CS.steeringTorqueEps, CS.steeringPressed, CS.steeringRateLimited, path_plan.angleSteers, path_plan.angleOffset)
+
+  actuators.steer = LaC.getOutputSteer()
+  actuators.steerAngle = LaC.getAngleSteersDes()
+  lac_log = log.ControlsState.LateralLQRState.new_message()
+  
+  lac_log.active = LaC.get_lqr_log_active();
+  lac_log.steerAngle = LaC.get_lqr_log_steerAngle();
+  lac_log.i = LaC.get_lqr_log_i();
+  lac_log.lqrOutput = LaC.get_lqr_log_lqrOutput();
+  lac_log.saturated = LaC.get_lqr_log_saturated();
   # Send a "steering required alert" if saturation count has reached the limit
   if lac_log.saturated and not CS.steeringPressed:
     # Check if we deviated from the path
@@ -410,7 +439,7 @@ def data_send(sm, pm, CS, CI, CP, VM, state, events, actuators, v_cruise_kph, rk
     "upAccelCmd": float(LoC.pid.p),
     "uiAccelCmd": float(LoC.pid.i),
     "ufAccelCmd": float(LoC.pid.f),
-    "angleSteersDes": float(LaC.angle_steers_des),
+    "angleSteersDes": LaC.getAngleSteersDes(), # float(LaC.angle_steers_des),
     "vTargetLead": float(v_acc),
     "aTarget": float(a_acc),
     "jerkFactor": float(sm['plan'].jerkFactor),
@@ -473,7 +502,6 @@ def controlsd_thread(sm=None, pm=None, can_sock=None):
   set_realtime_priority(3)
   
   params = Params()
-  print('-------------1')
   is_metric = params.get("IsMetric", encoding='utf8') == "1"
   is_ldw_enabled = params.get("IsLdwEnabled", encoding='utf8') == "1"
   passive = params.get("Passive", encoding='utf8') == "1"
@@ -502,22 +530,22 @@ def controlsd_thread(sm=None, pm=None, can_sock=None):
   has_relay = hw_type in [HwType.blackPanda, HwType.uno]
 
   print("Waiting for CAN messages...")
-  # messaging.get_one_can(can_sock)
-  #CI, CP = get_car(can_sock, pm.sock['sendcan'], has_relay)
-  CP = car.CarParams.from_bytes(params.get("CarParams", block=True))
-  CI = get_CI(CP)
+  messaging.get_one_can(can_sock)
+  CI, CP = get_car(can_sock, pm.sock['sendcan'], has_relay)
+  # CP = car.CarParams.from_bytes(params.get("CarParams", block=True))
+  # CI = get_CI(CP)
   print("------------CI.compute_gb------------%s"%CI.compute_gb)
 
   car_recognized = CP.carName != 'mock'
   # If stock camera is disconnected, we loaded car controls and it's not chffrplus
   controller_available = CP.enableCamera and CI.CC is not None and not passive
-  community_feature_disallowed = CP.communityFeature and not community_feature_toggle
+  community_feature_disallowed = False;#CP.communityFeature and not community_feature_toggle
   read_only = not car_recognized or not controller_available or CP.dashcamOnly or community_feature_disallowed
   if read_only:
-    pass # CP.safetyModel = car.CarParams.SafetyModel.noOutput
+    CP.safetyModel = car.CarParams.SafetyModel.noOutput
 
-  # Write CarParams for radard and boardd safety mode
-  # params.put("CarParams", CP.to_bytes())
+  #Write CarParams for radard and boardd safety mode
+  params.put("CarParams", CP.to_bytes())
   params.put("LongitudinalControl", "1" if CP.openpilotLongitudinalControl else "0")
 
   CC = car.CarControl.new_message()
@@ -526,16 +554,23 @@ def controlsd_thread(sm=None, pm=None, can_sock=None):
   startup_alert = get_startup_alert(car_recognized, controller_available)
   AM.add(sm.frame, startup_alert, False)
 
-  LoC = LongControl(CP, CI.compute_gb)
+  # LoC = LongControl(CP, CI.compute_gb)
+  LoC = liblonctl_py.liblctl
   print("------------CI.compute_gb------------%s"%CI.compute_gb)
   VM = VehicleModel(CP)
+
+  so = ctypes.cdll.LoadLibrary
+  lqr_dir = os.path.dirname(os.path.abspath(__file__))
+  liblqr_fn = os.path.join(lqr_dir, "lib/liblqr.so")
+  # lib = so(liblqr_fn) 
 
   if CP.lateralTuning.which() == 'pid':
     LaC = LatControlPID(CP)
   elif CP.lateralTuning.which() == 'indi':
     LaC = LatControlINDI(CP)
   elif CP.lateralTuning.which() == 'lqr':
-    LaC = LatControlLQR(CP)
+    LaC = liblatctl_py.liblqr # LatControlLQR(CP)
+  print("------------liblqr_fn------------%s"%LaC.getAngleSteersDes())
 
   driver_status = DriverStatus()
   is_rhd = params.get("IsRHD")
@@ -550,12 +585,13 @@ def controlsd_thread(sm=None, pm=None, can_sock=None):
   can_error_counter = 0
   last_blinker_frame = 0
   events_prev = []
+  print("------------sm['liveCalibration']------------")
 
   sm['liveCalibration'].calStatus = Calibration.INVALID
   sm['pathPlan'].sensorValid = True
   sm['pathPlan'].posenetValid = True
   sm['thermal'].freeSpace = 1.
-
+  
   # detect sound card presence
   sounds_available = not os.path.isfile('/EON') or (os.path.isdir('/proc/asound/card0') and open('/proc/asound/card0/state').read().strip() == 'ONLINE')
 

@@ -25,10 +25,10 @@ int apply_toyota_steer_torque_limits(float apply_torque, float apply_torque_last
 
 LatControlINDI::LatControlINDI()
 {
-  LIMIT.STEER_MAX = 1500;
-  LIMIT.STEER_DELTA_UP = 10;
-  LIMIT.STEER_DELTA_DOWN = 25;
-  LIMIT.STEER_ERROR_MAX = 350;
+  LIMITS.STEER_MAX = 1500;
+  LIMITS.STEER_DELTA_UP = 10;
+  LIMITS.STEER_DELTA_DOWN = 25;
+  LIMITS.STEER_ERROR_MAX = 350;
 
   angle_steers_des = 0.0;
   float tmp[3][3];
@@ -102,7 +102,7 @@ bool LatControlINDI::_check_saturation(float control, bool check_saturation, flo
     return sat_count > sat_limit;
 }
 
-LatINDIRet LatControlINDI::update(bool active, float v_ego, float angle_steers, float angle_steers_rate, float eps_torque, bool steer_override, bool rate_limited, CHandler chandler)
+LatINDIRet LatControlINDI::update(bool active, float v_ego, float angle_steers, float angle_steers_rate, float eps_torque, bool steer_override, bool rate_limited, float angleSteers, float rateSteers)
 {
   LatINDIRet ret;
   float y[2][1];
@@ -141,8 +141,8 @@ LatINDIRet LatControlINDI::update(bool active, float v_ego, float angle_steers, 
     delayed_output = 0.0;
   }
   else{
-    angle_steers_des = chandler.angleSteers;
-    rate_steers_des = chandler.rateSteers;
+    angle_steers_des = angleSteers;
+    rate_steers_des = rateSteers;
 
     steers_des = angle_steers_des * DEG_TO_RAD;
     rate_des = rate_steers_des * DEG_TO_RAD;
@@ -169,7 +169,7 @@ LatINDIRet LatControlINDI::update(bool active, float v_ego, float angle_steers, 
       output_steer = delayed_output + delta_u;
     }
 
-    steer_max = interp(v_ego, CP.steerMaxBP, CP.steerMaxV, ARRAYSIZE(steerMaxBP));
+    steer_max = interp(v_ego, CP.steerMaxBP, CP.steerMaxV, ARRAYSIZE(CP.steerMaxBP));
     output_steer = clip(output_steer, -steer_max, steer_max);
     
     ret.indi_log.active = true;
@@ -181,7 +181,7 @@ LatINDIRet LatControlINDI::update(bool active, float v_ego, float angle_steers, 
     ret.indi_log.output = output_steer;
 
     check_saturation = v_ego > 10. && !rate_limited && !steer_override; 
-    ret.indi_log.saturated = _check_saturation(output_steer, check_saturation, steers_max);
+    ret.indi_log.saturated = _check_saturation(output_steer, check_saturation, steer_max);
 
   }
   ret.output_steer = output_steer;

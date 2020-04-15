@@ -11,8 +11,7 @@ public:
     // float get_k_i();
     void reset();
     bool _check_saturation(float control, bool check_saturation, float error);
-    float update(float *kpBP, float *kpV, float *kiBP, float *kiV, float setpoint, float measurement, float speed=0.0, float deadzone=0., float feedforward=0., bool freeze_integrator=false, bool check_saturation=true, bool override=false);
-
+    float update(float *kpBP, float *kpV, int size_p, float *kiBP, float *kiV, int size_i, float setpoint, float measurement, float speed, float deadzone, float feedforward, bool freeze_integrator, bool check_saturation, bool override);
     // float kpBP[3]; // proportional gain
     // float kpV[3];
     // float kiBP[2]; // integral gain

@@ -1,0 +1,15 @@
+Import('env', 'arch')
+
+longctl_files = [
+  "latcontrol_indi.cc",
+  "../pid.cc",
+  "../utils.cc",
+  "../carparams.cc"
+]
+
+env.SharedLibrary('longctl', longctl_files)
+# if arch != "aarch64":
+#     acado_libs = [File("#phonelibs/acado/x64/lib/libacado_toolkit.a"),
+#                   File("#phonelibs/acado/x64/lib/libacado_casadi.a"),
+#                   File("#phonelibs/acado/x64/lib/libacado_csparse.a")]
+#     env.Program('generator', 'generator.cpp', LIBS=acado_libs, CPPPATH=cpp_path)

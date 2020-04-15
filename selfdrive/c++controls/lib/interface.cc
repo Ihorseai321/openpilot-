@@ -1,22 +1,52 @@
 #include "interface.h"
+#include <iostream>
+using namespace std;
 
-SIGNAL signals[14] = {{"WhlRr_W_Meas", "WheelSpeed_CG1", 0.0},
-                        {"WhlRr_W_Meas", "WheelSpeed_CG1", 0.0},
-                        {"WhlRr_W_Meas", "WheelSpeed_CG1", 0.0},
-                        {"WhlRr_W_Meas", "WheelSpeed_CG1", 0.0},
-                        {"SteWhlRelInit_An_Sns", "Steering_Wheel_Data_CG1", 0.0},
-                        {"Cruise_State", "Cruise_Status", 0.0},
-                        {"Set_Speed", "Cruise_Status", 0.0},
-                        {"LaActAvail_D_Actl", "Lane_Keep_Assist_Status", 0},
-                        {"LaHandsOff_B_Actl", "Lane_Keep_Assist_Status", 0},
-                        {"LaActDeny_B_Actl", "Lane_Keep_Assist_Status", 0},
-                        {"ApedPosScal_Pc_Actl", "EngineData_14", 0.0},
-                        {"Dist_Incr", "Steering_Buttons", 0.0},
-                        {"Brake_Drv_Appl", "Cruise_Status", 0.0},
-                        {"Brake_Lights", "BCM_to_HS_Body", 0.0}};
+// ford_fusion_2018_pt
+// SIGNAL signals[14] = {{"WhlRr_W_Meas", "WheelSpeed_CG1", 0.0},
+//                         {"WhlRr_W_Meas", "WheelSpeed_CG1", 0.0},
+//                         {"WhlRr_W_Meas", "WheelSpeed_CG1", 0.0},
+//                         {"WhlRr_W_Meas", "WheelSpeed_CG1", 0.0},
+//                         {"SteWhlRelInit_An_Sns", "Steering_Wheel_Data_CG1", 0.0},
+//                         {"Cruise_State", "Cruise_Status", 0.0},
+//                         {"Set_Speed", "Cruise_Status", 0.0},
+//                         {"LaActAvail_D_Actl", "Lane_Keep_Assist_Status", 0},
+//                         {"LaHandsOff_B_Actl", "Lane_Keep_Assist_Status", 0},
+//                         {"LaActDeny_B_Actl", "Lane_Keep_Assist_Status", 0},
+//                         {"ApedPosScal_Pc_Actl", "EngineData_14", 0.0},
+//                         {"Dist_Incr", "Steering_Buttons", 0.0},
+//                         {"Brake_Drv_Appl", "Cruise_Status", 0.0},
+//                         {"Brake_Lights", "BCM_to_HS_Body", 0.0}};
 
+// sig_name, sig_address, default
+SIGNAL signals[25] = {{"STEER_ANGLE", "STEER_ANGLE_SENSOR", 0},
+                      {"GEAR", "GEAR_PACKET", 0},
+                      {"BRAKE_PRESSED", "BRAKE_MODULE", 0},
+                      {"GAS_PEDAL", "GAS_PEDAL", 0},
+                      {"WHEEL_SPEED_FL", "WHEEL_SPEEDS", 0},
+                      {"WHEEL_SPEED_FR", "WHEEL_SPEEDS", 0},
+                      {"WHEEL_SPEED_RL", "WHEEL_SPEEDS", 0},
+                      {"WHEEL_SPEED_RR", "WHEEL_SPEEDS", 0},
+                      {"DOOR_OPEN_FL", "SEATS_DOORS", 1},
+                      {"DOOR_OPEN_FR", "SEATS_DOORS", 1},
+                      {"DOOR_OPEN_RL", "SEATS_DOORS", 1},
+                      {"DOOR_OPEN_RR", "SEATS_DOORS", 1},
+                      {"SEATBELT_DRIVER_UNLATCHED", "SEATS_DOORS", 1},
+                      {"TC_DISABLED", "ESP_CONTROL", 1},
+                      {"STEER_FRACTION", "STEER_ANGLE_SENSOR", 0},
+                      {"STEER_RATE", "STEER_ANGLE_SENSOR", 0},
+                      {"CRUISE_ACTIVE", "PCM_CRUISE", 0},
+                      {"CRUISE_STATE", "PCM_CRUISE", 0},
+                      {"STEER_TORQUE_DRIVER", "STEER_TORQUE_SENSOR", 0},
+                      {"STEER_TORQUE_EPS", "STEER_TORQUE_SENSOR", 0},
+                      {"TURN_SIGNALS", "STEERING_LEVERS", 3},   // 3 is no blinkers
+                      {"LKA_STATE", "EPS_STATUS", 0},
+                      {"IPAS_STATE", "EPS_STATUS", 1},
+                      {"BRAKE_LIGHTS_ACC", "ESP_CONTROL", 0},
+                      {"AUTO_HIGH_BEAM", "LIGHT_STALK", 0},
+                     };
 
-CarInterface::CarInterface(bool carcontroller):psr("ford_fusion_2018_pt.dbc", signals, 0)
+CarInterface::CarInterface(bool carcontroller):psr("toyota_rav4_2017_pt_generated", signals, 0)
 {
   frame = 0;
   gas_pressed_prev = false;
@@ -35,13 +65,15 @@ CarInterface::~CarInterface()
   // }
 }
 
-CARSTATE CarInterface::update(std::string can_strings)
+CARSTATE CarInterface::update(std::vector<std::string> can_strings)
 {
   // ******************* do can recv *******************
+  cout << "before update_strings" << endl;
   psr.update_strings(can_strings, false);
+  cout << "after update_strings" << endl;
 
   CS.update(psr);
-
+  cout << "after CS.update(psr)" << endl;
   // create message
   CARSTATE ret;
 
@@ -55,7 +87,11 @@ CARSTATE CarInterface::update(std::string can_strings)
   ret.wheelSpeeds.fr = CS.v_wheel_fr;
   ret.wheelSpeeds.rl = CS.v_wheel_rl;
   ret.wheelSpeeds.rr = CS.v_wheel_rr;
-
+  cout << "CS.v_ego->" << CS.v_ego << endl;
+  cout << "CS.v_ego_raw->" << CS.v_ego_raw << endl;
+  cout << "CS.standstill->" << CS.standstill << endl;
+  cout << "CS.v_wheel_fl->" << CS.v_wheel_fl << endl;
+  cout << "CS.v_wheel_rl->" << CS.v_wheel_rl << endl;
   // steering wheel
   ret.steeringAngle = CS.angle_steers;
   ret.steeringPressed = CS.steer_override;

@@ -133,8 +133,8 @@ managed_processes = {
   "uploader": "selfdrive.loggerd.uploader",
   "deleter": "selfdrive.loggerd.deleter",
   "controlsd": "selfdrive.controls.controlsd",
-  # "plannerd": ("selfdrive/c++controls", ["./plannerd"]),
-  "plannerd": "selfdrive.controls.plannerd",
+  "plannerd": ("selfdrive/c++controls", ["./plannerd"]),
+  # "plannerd": "selfdrive.controls.plannerd",
   "radard": "selfdrive.controls.radard",
   "ubloxd": ("selfdrive/locationd", ["./ubloxd"]),
   "loggerd": ("selfdrive/loggerd", ["./loggerd"]),
@@ -290,12 +290,12 @@ def prepare_managed_process(p):
     # build this process
     cloudlog.info("building %s" % (proc,))
     try:
-      subprocess.check_call(["make", "-j4"], cwd=os.path.join(BASEDIR, proc[0]))
+      subprocess.check_call(["make", "-j8"], cwd=os.path.join(BASEDIR, proc[0]))
     except subprocess.CalledProcessError:
       # make clean if the build failed
       cloudlog.warning("building %s failed, make clean" % (proc, ))
       subprocess.check_call(["make", "clean"], cwd=os.path.join(BASEDIR, proc[0]))
-      subprocess.check_call(["make", "-j4"], cwd=os.path.join(BASEDIR, proc[0]))
+      subprocess.check_call(["make", "-j8"], cwd=os.path.join(BASEDIR, proc[0]))
 
 def kill_managed_process(name):
   if name not in running or name not in managed_processes:

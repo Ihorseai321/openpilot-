@@ -34,33 +34,70 @@ loc_objs = [
 loc_libs = [messaging, 'zmq', 'capnp', 'kj', 'pthread', 'm', 'lateralmpc', 'longmpc']
 env.Program("plannerd", loc_objs, LIBS=loc_libs, LIBPATH=['#selfdrive/c++controls/lib/lateral_mpc/', '#selfdrive/c++controls/lib/longitudinal_mpc/'])
 
-ctl_objs = [
-  "controlsd.cc",
-  "lib/common.cc",
-  "lib/parser.cc",
-  "lib/canparser.cc",
-  "lib/message_state.cc",
-  "lib/dbc.cc",
-  "lib/carstate.cc",
-  "lib/interface.cc",
-  "lib/ctl_handler.cc",
-  "lib/vehicle_model.cc",
-  "lib/kf.cc",
-  "lib/latcontrol_pid.cc",
-  "lib/longcontrol.cc",
-  "lib/utils.cc",
-  "lib/ratekeeper.cc",
-  "lib/pid.cc"
-]
+# ctl_objs = [
+#   "controlsd.cc",
+#   "t_pub.cc",
+#   "lib/toyota_rav4_2017_pt_generated.cc" ,
+#   "lib/common.cc",
+#   "lib/parser.cc",
+#   "lib/canparser.cc",
+#   "lib/message_state.cc",
+#   "lib/common_dbc.cc",
+#   "lib/carstate.cc",
+#   "lib/interface.cc",
+#   "lib/ctl_handler.cc",
+#   "lib/vehicle_model.cc",
+#   "lib/kf.cc",
+#   "lib/latcontrol_pid.cc",
+#   "lib/longcontrol.cc",
+#   "lib/utils.cc",
+#   "lib/ratekeeper.cc",
+#   "lib/pid.cc",
+#   # "lib/dbc.cc"
+# ]
 
-ctl_libs = [messaging, 'zmq', 'capnp', 'kj', 'pthread', 'm']
-env.Program("controlsd", ctl_objs, LIBS=ctl_libs)
+# ctl_libs = [messaging, 'zmq', 'capnp', 'kj', 'pthread', 'm']
+# env.Program("controlsd", ctl_objs, LIBS=ctl_libs)
 
 # env.Program("test", [
 #   "test.cc",
-#   "lib/handler.cc"],
-#   LIBS=loc_libs)
+#   "lib/toyota_rav4_2017_pt_generated.cc" ,
+#   "lib/common.cc",
+#   "lib/parser.cc",
+#   "lib/canparser.cc",
+#   "lib/message_state.cc",
+#   "lib/common_dbc.cc",
+#   "lib/carstate.cc",
+#   "lib/interface.cc",
+#   "lib/ctl_handler.cc",
+#   "lib/vehicle_model.cc",
+#   "lib/kf.cc",
+#   "lib/latcontrol_pid.cc",
+#   "lib/longcontrol.cc",
+#   "lib/utils.cc",
+#   "lib/ratekeeper.cc",
+#   "lib/pid.cc"],
+#   LIBS=ctl_libs)
 
+# i_objs = [
+#   "test_interface.cc",
+#   "lib/common.cc",
+#   "lib/parser.cc",
+#   "lib/canparser.cc",
+#   "lib/message_state.cc",
+#   "lib/dbc.cc",
+#   "lib/carstate.cc",
+#   "lib/interface.cc",
+#   "lib/ctl_handler.cc",
+#   "lib/vehicle_model.cc",
+#   "lib/kf.cc",
+#   "lib/latcontrol_pid.cc",
+#   "lib/longcontrol.cc",
+#   "lib/utils.cc",
+#   "lib/ratekeeper.cc",
+#   "lib/pid.cc"
+# ]
+# env.Program("interface", i_objs, LIBS=ctl_libs)
   
 
 

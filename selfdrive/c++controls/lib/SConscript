@@ -1,0 +1,31 @@
+Import('env', 'arch')
+
+# indi_files = [
+#   "latcontrol_indi.cc",
+#   "utils.cc",
+# ]
+
+# env.SharedLibrary('indi', indi_files)
+
+lqr_files = [
+  "lqr_wrap.cc",
+  "latcontrol_lqr.cc",
+  "utils.cc",
+]
+
+env.SharedLibrary('lqr', lqr_files)
+
+lctl_files = [
+  "lctl_wrap.cc",
+  "longcontrol.cc",
+  "utils.cc",
+  "pid.cc"
+]
+
+env.SharedLibrary('lctl', lctl_files, LIBS=['capnp'])
+
+# if arch != "aarch64":
+#     acado_libs = [File("#phonelibs/acado/x64/lib/libacado_toolkit.a"),
+#                   File("#phonelibs/acado/x64/lib/libacado_casadi.a"),
+#                   File("#phonelibs/acado/x64/lib/libacado_csparse.a")]
+#     env.Program('generator', 'generator.cpp', LIBS=acado_libs, CPPPATH=cpp_path)

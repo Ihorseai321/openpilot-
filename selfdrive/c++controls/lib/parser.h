@@ -17,7 +17,7 @@ public:
   virtual ~Parser();
   std::unordered_set<unsigned int> update_vl();
   std::unordered_set<unsigned int> update_string(std::string dat, bool sendcan);
-  std::unordered_set<unsigned int> update_strings(std::string s, bool sendcan);
+  std::unordered_set<unsigned int> update_strings(std::vector<std::string> strings, bool sendcan);
   // std::unordered_set<unsigned int> update_strings(std::vector<std::string> strings, bool sendcan);
 
   std::string dbc_name;
@@ -26,7 +26,7 @@ public:
   bool can_valid;
   int can_invalid_cnt;
 private:
-  DBC *dbc;
+  const DBC *dbc;
   CANParser *can;
   std::map<std::string, unsigned int> msg_name_to_address;
   std::map<unsigned int, std::string> address_to_msg_name;

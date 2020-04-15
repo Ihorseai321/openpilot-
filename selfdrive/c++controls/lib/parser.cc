@@ -21,7 +21,7 @@ Parser::Parser(std::string dbc_name, SIGNAL signals[], int bus)
   
   std::vector<struct MessageParseOptions> message_options_v;
   struct MessageParseOptions mpo;
-  for(int j = 0; j < 14; ++j){
+  for(int j = 0; j < 25; ++j){
     struct SignalParseOptions spo = {msg_name_to_address[signals[j].sig_address], signals[j].sig_name.c_str(), signals[j].sig_default};
     // spo.address = msg_name_to_address[signals[j].sig_address];
     // spo.name = signals[j].sig_name.c_str();
@@ -81,17 +81,17 @@ std::unordered_set<unsigned int> Parser::update_string(std::string dat, bool sen
 }
 
 // std::unordered_set<unsigned int> Parser::update_strings(std::vector<std::string> strings, bool sendcan)
-std::unordered_set<unsigned int> Parser::update_strings(std::string s, bool sendcan)
+std::unordered_set<unsigned int> Parser::update_strings(std::vector<std::string> strings, bool sendcan)
 {
   std::unordered_set<unsigned int> updated_vals;
   std::unordered_set<unsigned int> updated_val;
 
-  updated_val = update_string(s, sendcan);
-  updated_vals.insert(updated_val.begin(), updated_val.end());
-  // for(auto s : strings){
-  //   updated_val = update_string(s, sendcan);
-  //   updated_vals.insert(updated_val.begin(), updated_val.end());
-  // }
+  // updated_val = update_string(s, sendcan);
+  // updated_vals.insert(updated_val.begin(), updated_val.end());
+  for(auto s : strings){
+    updated_val = update_string(s, sendcan);
+    updated_vals.insert(updated_val.begin(), updated_val.end());
+  }
 
   return updated_vals;
 }

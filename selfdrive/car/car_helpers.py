@@ -116,7 +116,7 @@ def fingerprint(logcan, sendcan, has_relay):
 
 def get_car(logcan, sendcan, has_relay=False):
   candidate, fingerprints, vin, car_fw = fingerprint(logcan, sendcan, has_relay)
-
+  print(candidate)
   if candidate is None:
     cloudlog.warning("car doesn't match any fingerprints: %r", fingerprints)
     candidate = "mock"
@@ -127,3 +127,15 @@ def get_car(logcan, sendcan, has_relay=False):
   car_params.carFw = car_fw
 
   return CarInterface(car_params, CarController), car_params
+
+if __name__ == '__main__':
+  can_sock=None
+  pm = None
+  if can_sock is None:
+    can_timeout = None if os.environ.get('NO_CAN_TIMEOUT', False) else 100
+    can_sock = messaging.sub_sock('can', timeout=can_timeout)
+
+  if pm is None:
+    pm = messaging.PubMaster(['sendcan'])
+
+  CI, CP = get_car(can_sock, pm.sock['sendcan'], False)

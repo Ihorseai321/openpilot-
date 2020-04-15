@@ -16,6 +16,18 @@ float MAX_SPEED_ERROR_V[2] = {1.5, 0.8};  // max positive v_pid error VS actual 
 
 float RATE = 100.0;
 
+float gasMaxBP[1] = {0.};
+float gasMaxV[1] = {0.5};
+float longitudinalTuning_kpV[3] = {3.6, 2.4, 1.5};
+float longitudinalTuning_kiV[2] = {0.54, 0.36};
+float longitudinalTuning_kpBP[3] = {0., 5., 35.};
+float longitudinalTuning_kiBP[2] = {0., 35.};
+float longitudinalTuning_deadzoneBP[2] = {0., 9.};
+float longitudinalTuning_deadzoneV[2] = {0., .15};
+float brakeMaxBP[1] = {0.};
+float brakeMaxV[1] = {1.};
+bool stoppingControl = false;
+
 LongControl::LongControl():pid(100.0, 0.8, true)
 {
     long_control_state = cereal::ControlsState::LongControlState::OFF;
@@ -32,12 +44,12 @@ void LongControl::reset(float v_pid)
     this->v_pid = v_pid;
 }
 
-LCtrlRet LongControl::update(bool active, float v_ego, bool brake_pressed, bool standstill, bool cruise_standstill, int v_cruise, float v_target, float v_target_future, float a_target)
+void LongControl::update(bool active, float v_ego, bool brake_pressed, bool standstill, bool cruise_standstill, int v_cruise, float v_target, float v_target_future, float a_target)
 {
     // """Update longitudinal control. This updates the state machine and runs a PID loop"""
     // Actuation limits
-    float gas_max = interp(v_ego, CP.gasMaxBP, CP.gasMaxV, 1);
-    float brake_max = interp(v_ego, CP.brakeMaxBP, CP.brakeMaxV, 2);
+    float gas_max = interp(v_ego, gasMaxBP, gasMaxV, 1);
+    float brake_max = interp(v_ego, brakeMaxBP, brakeMaxV, 2);
 
     // Update state machine
     float output_gb = last_output_gb;
@@ -59,11 +71,11 @@ LCtrlRet LongControl::update(bool active, float v_ego, bool brake_pressed, bool 
 
         // Toyota starts braking more when it thinks you want to stop
         // Freeze the integrator so we don't accelerate to compensate, and don't allow positive acceleration
-        bool prevent_overshoot = !CP.stoppingControl && v_ego < 1.5 && v_target_future < 0.7;
-        float deadzone = interp(v_ego_pid, CP.longitudinalTuning_deadzoneBP, CP.longitudinalTuning_deadzoneV, 2);
+        bool prevent_overshoot = !stoppingControl && v_ego < 1.5 && v_target_future < 0.7;
+        float deadzone = interp(v_ego_pid, longitudinalTuning_deadzoneBP, longitudinalTuning_deadzoneV, 2);
 
-        output_gb = pid.update(CP.longitudinalTuning_kpBP, CP.longitudinalTuning_kpV, CP.longitudinalTuning_kiBP, 
-                               CP.longitudinalTuning_kiV, v_pid, v_ego_pid, v_ego_pid, deadzone, a_target, 
+        output_gb = pid.update(longitudinalTuning_kpBP, longitudinalTuning_kpV, 3, longitudinalTuning_kiBP, 
+                               longitudinalTuning_kiV, 2, v_pid, v_ego_pid, v_ego_pid, deadzone, a_target, 
                                prevent_overshoot);
 
         if(prevent_overshoot){
@@ -91,12 +103,9 @@ LCtrlRet LongControl::update(bool active, float v_ego, bool brake_pressed, bool 
     }
 
     last_output_gb = output_gb;
-    LCtrlRet ret;
-    ret.final_gas = clip(output_gb, 0.0, gas_max);
-    ret.final_brake = -clip(output_gb, -brake_max, 0.0);
 
-    return ret;
-
+    final_gas = clip(output_gb, 0.0, gas_max);
+    final_brake = -clip(output_gb, -brake_max, 0.0);
 }
 
 cereal::ControlsState::LongControlState long_control_state_trans(bool active, cereal::ControlsState::LongControlState long_control_state, float v_ego, float v_target, float v_pid, float output_gb, bool brake_pressed, bool cruise_standstill)

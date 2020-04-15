@@ -84,11 +84,11 @@ bool PIController::_check_saturation(float control, bool check_saturation, float
     return sat_count > sat_limit;
 }
 
-float PIController::update(float *kpBP, float *kpV, float *kiBP, float *kiV, float setpoint, float measurement, float speed, float deadzone, float feedforward, bool freeze_integrator, bool check_saturation, bool override)
+float PIController::update(float *kpBP, float *kpV, int size_p, float *kiBP, float *kiV, int size_i, float setpoint, float measurement, float speed, float deadzone, float feedforward, bool freeze_integrator, bool check_saturation, bool override)
 {
     this->speed = speed;
     float error = apply_deadzone(setpoint - measurement, deadzone);
-    p = error * interp(speed, kpBP, kpV, ARRAYSIZE(kpBP));
+    p = error * interp(speed, kpBP, kpV, size_p);
     f = feedforward * k_f;
     float control = 0.0;
     float _i = 0.0;
@@ -97,7 +97,7 @@ float PIController::update(float *kpBP, float *kpV, float *kiBP, float *kiV, flo
         i -= i_unwind_rate * sign(i);
     }
     else{
-        _i = i + error * interp(speed, kiBP, kiV, ARRAYSIZE(kiBP)) * i_rate;
+        _i = i + error * interp(speed, kiBP, kiV, size_i) * i_rate;
         control = p + f + _i;
 
         if(convert){

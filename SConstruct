@@ -226,6 +226,7 @@ SConscript(['selfdrive/locationd/SConscript'])
 
 SConscript(['selfdrive/c++controls/lib/lateral_mpc/SConscript'])
 SConscript(['selfdrive/c++controls/lib/longitudinal_mpc/SConscript'])
+SConscript(['selfdrive/controls/lib/SConscript'])
 # SConscript(['selfdrive/c++controls/lib/cluster/SConscript'])
 
 SConscript(['selfdrive/c++controls/SConscript'])

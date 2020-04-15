@@ -3,6 +3,7 @@
 #include "carparams.h"
 #include "utils.h"
 
+
 typedef struct{
   float STEER_MAX;
   float STEER_DELTA_UP;       // 1.5s time to peak torque
@@ -40,7 +41,7 @@ public:
   LatControlINDI();
   ~LatControlINDI();
   void reset();
-  LatINDIRet update(bool active, float v_ego, float angle_steers, float angle_steers_rate, float eps_torque, bool steer_override, bool rate_limited, CHandler chandler);
+  LatINDIRet update(bool active, float v_ego, float angle_steers, float angle_steers_rate, float eps_torque, bool steer_override, bool rate_limited, float angleSteers, float rateSteers);
 
   float angle_steers_des;
   float rate_steers_des;

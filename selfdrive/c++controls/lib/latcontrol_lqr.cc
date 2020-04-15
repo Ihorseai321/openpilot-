@@ -1,23 +1,37 @@
 #include "latcontrol_lqr.h"
 #include "utils.h"
+#include <cstdio>
+
+float scale_ = 1500.0;
+float ki_ = 0.05;
+float a[4] = {0., 1., -0.22619643, 1.21822268};
+float b[2] = {-1.92006585e-04, 3.95603032e-05};
+float c[2] = {1.0, 0.0};
+float k[2] = {-110.73572306, 451.22718255};
+float l[2] = {0.3233671, 0.3185757};
+float dcGain = 0.002237852961363602;
+float steerLimitTimer = 0.4;
+float steerMaxBP[2] = {4.4444445, 12.5};
+float steerMaxV[2] = {1.0, 1.0};
 
 LatControlLQR::LatControlLQR()
 {
-  scale = CP.lateralTuning_lqr_scale;
-  ki = CP.lateralTuning_lqr_ki;
+  angle_steers_des = 0.0;
+  scale = scale_;
+  ki = ki_;
 
   for(int i = 0; i < 4; ++i){
-    A[i] = CP.lateralTuning_lqr_a[i];
+    A[i] = a[i];
 
     if(i < 2){
-      B = CP.lateralTuning_lqr_b[i];
-      C = CP.lateralTuning_lqr_c[i];
-      K = CP.lateralTuning_lqr_k[i];
-      L = CP.lateralTuning_lqr_l[i];
+      B[i] = b[i];
+      C[i] = c[i];
+      K[i] = k[i];
+      L[i] = l[i];
     }
   }
 
-  dc_gain = CP.lateralTuning_lqr_dcGain;
+  dc_gain = dcGain;
 
   x_hat[0] = 0.0;
   x_hat[1] = 0.0;
@@ -26,13 +40,21 @@ LatControlLQR::LatControlLQR()
   i_rate = 1.0 * DT_CTRL;
 
   sat_count_rate = 1.0 * DT_CTRL;
-  sat_limit = CP.steerLimitTimer;
+  sat_limit = steerLimitTimer;
 
+  lqr_log_active = false;
+  lqr_log_steerAngle = 0;
+  lqr_log_i = 0;
+  lqr_log_output = 0;
+  lqr_log_lqrOutput = 0;
+  lqr_log_saturated = false;
   reset();
 }
 
 LatControlLQR::~LatControlLQR()
-{}
+{
+  printf("-------->LQR: deconstruction \n");
+}
 
 void LatControlLQR::reset()
 {
@@ -56,18 +78,20 @@ bool LatControlLQR::_check_saturation(float control, bool check_saturation, floa
     return sat_count > sat_limit;
 }
 
-LatLQRRet LatControlLQR::update(bool active, float v_ego, float angle_steers, float angle_steers_rate, float eps_torque, bool steer_override, bool rate_limited, CHandler chandler)
+LatLQRRet LatControlLQR::update(bool active, float v_ego, float angle_steers, 
+          float angle_steers_rate, float eps_torque, bool steer_override, 
+          bool rate_limited, float path_plan_angleSteers, float path_plan_angleOffset)
 {
   LatLQRRet ret;
   float u_lqr;
   float lqr_output;
   float error, i, control;
   bool check_saturation, saturated;
-  float steer_max = interp(v_ego, CP.steerMaxBP, CP.steerMaxV, ARRAYSIZE(steerMaxBP));
+  float steers_max = interp(v_ego, steerMaxBP, steerMaxV, ARRAYSIZE(steerMaxBP));
   float torque_scale = (0.45 + v_ego / 60.0) * (0.45 + v_ego / 60.0);
 
-  angle_steers_des = chandler.angleSteers - chandler.angleOffset;
-  float angle_steers = chandler.angleOffset;
+  angle_steers_des = path_plan_angleSteers - path_plan_angleOffset;
+  angle_steers = path_plan_angleOffset;
 
   float angle_steers_k = C[0] * x_hat[0] + C[1] * x_hat[1];
 
@@ -77,12 +101,12 @@ LatLQRRet LatControlLQR::update(bool active, float v_ego, float angle_steers, fl
   x_hat[1] = (A[2] * x_hat[0] + A[3] * x_hat[1]) + (B[1] * (eps_torque / torque_scale)) + L[1] * e;
   
   if(v_ego < 0.3 || !active){
-    lqr_log.active = false;
+    lqr_log_active = false;
     lqr_output = 0.0;
     reset();
   }
   else{
-    ret.lqr_log.active = true;
+    lqr_log_active = true;
 
     // LQR
     u_lqr = angle_steers_des / dc_gain - (K[0] * x_hat[0] + K[1] * x_hat[1]);
@@ -108,11 +132,12 @@ LatLQRRet LatControlLQR::update(bool active, float v_ego, float angle_steers, fl
   check_saturation = (v_ego > 10) && !rate_limited && !steer_override;
   saturated = _check_saturation(output_steer, check_saturation, steers_max);
 
-  ret.lqr_log.steerAngle = angle_steers_k + chandler.angleOffset;
-  ret.lqr_log.i = i_lqr;
-  ret.lqr_log.output = output_steer;
-  ret.lqr_log.lqrOutput = lqr_output;
-  ret.lqr_log.saturated = saturated;
-  
+  lqr_log_steerAngle = angle_steers_k + path_plan_angleOffset;
+  lqr_log_i = i_lqr;
+  lqr_log_output = output_steer;
+  lqr_log_lqrOutput = lqr_output;
+  lqr_log_saturated = saturated;
+  // ret.angle_steers_des = angle_steers_des;
+  // ret.output_steer = output_steer;
   return ret;
 }

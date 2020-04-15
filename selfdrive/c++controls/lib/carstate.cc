@@ -1,4 +1,6 @@
 #include "carstate.h"
+#include <iostream>
+using namespace std;
 
 CarState::CarState()
 {
@@ -25,12 +27,14 @@ CarState::~CarState()
   delete v_ego_kf;
 }
 
-void CarState::update(Parser cp)
+void CarState::update(Parser &cp)
 {
+  cout << "---->enter CarState::update" << endl;
   // update prevs, update must run once per loop
   prev_left_blinker_on = left_blinker_on;
   prev_right_blinker_on = right_blinker_on;
 
+  cout << "---->before wheel_speed_pair" << endl;
   // calc best v_ego estimate, by averaging two opposite corners
   std::pair<std::string, std::string> wheel_speed_pair("WheelSpeed_CG1", "WhlRr_W_Meas");
   v_wheel_fl = cp.vl[wheel_speed_pair] * WHEEL_RADIUS;
@@ -38,7 +42,8 @@ void CarState::update(Parser cp)
   v_wheel_rl = cp.vl[wheel_speed_pair] * WHEEL_RADIUS;
   v_wheel_rr = cp.vl[wheel_speed_pair] * WHEEL_RADIUS;
   v_wheel = (v_wheel_fl + v_wheel_fr + v_wheel_rl + v_wheel_rr) / 4;
-
+  
+  cout << "---->before Kalman filter" << endl;
   // Kalman filter
   if(std::abs(v_wheel - v_ego) > 2.0){  // Prevent large accelerations when car starts at non zero speed
     double tmp[2][1];
@@ -46,7 +51,7 @@ void CarState::update(Parser cp)
     tmp[1][0] = 0.0;
     v_ego_kf->setX(tmp);
   }
-
+  
   double v_ego_raw = v_wheel;
   double v_ego_x[2][1] = {{0}, {0}};
   v_ego_kf->update(v_wheel, v_ego_x);
@@ -54,16 +59,16 @@ void CarState::update(Parser cp)
   a_ego = v_ego_x[1][0];
 
   standstill = !(v_wheel > 0.001);
-
+  cout << "---->after Kalman filter1" << endl;
   std::pair<std::string, std::string> angle_steer_pair("Steering_Wheel_Data_CG1", "SteWhlRelInit_An_Sns");
   angle_steers = (float)cp.vl[angle_steer_pair];
-
+  cout << "---->after Kalman filter2" << endl;
   std::pair<std::string, std::string> v_cruise_pcm_pair("Cruise_Status", "Set_Speed");
   v_cruise_pcm = (float)cp.vl[v_cruise_pcm_pair] * MPH_TO_MS;
-
+  cout << "---->after Kalman filter3" << endl;
   std::pair<std::string, std::string> pcm_acc_status_pair("Cruise_Status", "Cruise_State");
-  pcm_acc_status = (int)cp.vl[pcm_acc_status_pair];
-
+  pcm_acc_status = (bool)cp.vl[pcm_acc_status_pair];
+  cout << "---->after Kalman filter4" << endl;
   main_on = (bool)cp.vl[pcm_acc_status_pair] != 0;
 
   std::pair<std::string, std::string> lkas_state_pair("Lane_Keep_Assist_Status", "LaActAvail_D_Actl");
@@ -72,19 +77,27 @@ void CarState::update(Parser cp)
 
   std::pair<std::string, std::string> steer_override_pair("Lane_Keep_Assist_Status", "LaHandsOff_B_Actl");
   steer_override = (float)!cp.vl[steer_override_pair];
-
+  cout << "---->after Kalman filter5" << endl;
   std::pair<std::string, std::string> steer_error_pair("Lane_Keep_Assist_Status", "LaActDeny_B_Actl");
   steer_error = (bool)cp.vl[steer_error_pair];
 
   std::pair<std::string, std::string> user_gas_pair("EngineData_14", "ApedPosScal_Pc_Actl");
   user_gas = (float)cp.vl[user_gas_pair];
-
+  cout << "---->after Kalman filter6" << endl;
   std::pair<std::string, std::string> brake_pressed_pair("Cruise_Status", "Brake_Drv_Appl");
   brake_pressed = (bool)cp.vl[brake_pressed_pair];
-
+  cout << "---->after Kalman filter7" << endl;
   std::pair<std::string, std::string> brake_lights_pair("BCM_to_HS_Body", "Brake_Lights");
   brake_lights = (bool)cp.vl[brake_lights_pair];
-
+  cout << "---->after Kalman filter8" << endl;
   std::pair<std::string, std::string> generic_toggle_pair("Steering_Buttons", "Dist_Incr");
   generic_toggle = (bool)cp.vl[generic_toggle_pair];
+  cout << "---->after Kalman filter9" << endl;
+  cout << "---->after Kalman filter9" << endl;
+
+  cout << "CarState.v_ego->" << v_ego << endl;
+  cout << "CarState.v_ego_raw->" << v_ego_raw << endl;
+  cout << "CarState.standstill->" << standstill << endl;
+  cout << "CarState.v_wheel_fl->" << v_wheel_fl << endl;
+  cout << "CarState.v_wheel_rl->" << v_wheel_rl << endl;
 }

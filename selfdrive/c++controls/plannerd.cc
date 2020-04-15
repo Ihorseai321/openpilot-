@@ -46,7 +46,7 @@ int main(int argc, char const *argv[])
     // sm['liveParameters'].sensorValid = True
     // sm['liveParameters'].steerRatio = CP.steerRatio
     // sm['liveParameters'].stiffnessFactor = 1.0
-
+    
     while (true){
       // cout << "plannerd running!!!" << endl;
       for (auto s : poller->poll(100)){

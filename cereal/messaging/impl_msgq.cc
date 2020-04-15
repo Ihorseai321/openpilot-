@@ -125,7 +125,7 @@ Message * MSGQSubSocket::receive(bool non_blocking){
     }
   }
   
-  cout << "r-----------------> " << r->getSize() << endl;
+  // cout << "r-----------------> " << r->getSize() << endl;
   return (Message*)r;
 }
 

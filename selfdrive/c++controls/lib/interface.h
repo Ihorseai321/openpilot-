@@ -14,7 +14,7 @@ class CarInterface
 public:
   CarInterface(bool carcontroller);
   ~CarInterface();
-  CARSTATE update(std::string can_strings);
+  CARSTATE update(std::vector<std::string> can_strings);
   float calc_accel_override(float a_ego, float a_target, float v_ego, float v_target);
 
   int frame;
