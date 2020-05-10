@@ -6,6 +6,8 @@ from selfdrive.can.parser import CANParser
 from selfdrive.car.gm.values import DBC, CAR, parse_gear_shifter, \
                                     CruiseButtons, is_eps_status_ok, \
                                     STEER_THRESHOLD, SUPERCRUISE_CARS
+# Reads values about your car's current state. Openpilot uses this information to know fast your is going, how much
+# your wheel is turned, etc
 
 def get_powertrain_can_parser(CP, canbus):
   # this function generates lists for signal, messages and initial values

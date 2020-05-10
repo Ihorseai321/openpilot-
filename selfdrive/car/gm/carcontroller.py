@@ -9,6 +9,8 @@ from selfdrive.can.packer import CANPacker
 
 VisualAlert = car.CarControl.HUDControl.VisualAlert
 
+# Car Controller sends controls commands at appropriate frequencies. The maximum steering, gas and braking
+# values are also set in this file which can differ by car model.
 
 class CarControllerParams():
   def __init__(self, car_fingerprint):
