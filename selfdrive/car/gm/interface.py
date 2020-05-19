@@ -9,6 +9,8 @@ from selfdrive.car.gm.carstate import CarState, CruiseButtons, get_powertrain_ca
 from selfdrive.car import STD_CARGO_KG, scale_rot_inertia, scale_tire_stiffness, is_ecu_disconnected, gen_empty_fingerprint
 from selfdrive.car.interfaces import CarInterfaceBase
 
+# Contains specifics about your car's specs and details about your car's UI like what error messages it has and what buttons are being pressed
+
 ButtonType = car.CarState.ButtonEvent.Type
 
 class CanBus(CarInterfaceBase):
